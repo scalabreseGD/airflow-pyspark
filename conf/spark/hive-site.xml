@@ -10,8 +10,8 @@
 
     <property>
         <name>hive.metastore.warehouse.dir</name>
-        <value>s3a://warehouse/</value>
-        <description>Location of default database for the warehouse</description>
+        <value>/tmp/spark-warehouse</value>
+        <description>Location of default database for the warehouse (external tables point to MinIO)</description>
     </property>
 
     <!-- S3/MinIO Configuration -->
