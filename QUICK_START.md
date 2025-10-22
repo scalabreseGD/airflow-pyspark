@@ -198,6 +198,53 @@ result = employees.join(departments, "dept_id") \
 result.write.mode("overwrite").parquet("s3a://data/employee_dept_view/")
 ```
 
+#### Pattern 4: Using Spark SQL
+
+```python
+# Read data from MinIO
+employees = spark.read.parquet("s3a://data/employees/")
+departments = spark.read.parquet("s3a://data/departments/")
+
+# Create temporary SQL views
+employees.createOrReplaceTempView("employees")
+departments.createOrReplaceTempView("departments")
+
+# Run SQL query
+result = spark.sql("""
+    SELECT
+        e.name,
+        e.salary,
+        d.dept_name,
+        CASE
+            WHEN e.salary >= 100000 THEN 'Senior'
+            WHEN e.salary >= 90000 THEN 'Mid-Level'
+            ELSE 'Junior'
+        END as performance_tier
+    FROM employees e
+    JOIN departments d ON e.dept_id = d.id
+    WHERE e.department = 'Engineering'
+        AND e.salary >= 85000
+    ORDER BY e.salary DESC
+""")
+
+# Write results to MinIO
+result.write.mode("overwrite").parquet("s3a://data/sql_query_results/")
+
+# You can also run aggregation queries
+summary = spark.sql("""
+    SELECT
+        department,
+        COUNT(*) as employee_count,
+        AVG(salary) as avg_salary,
+        MAX(salary) as max_salary
+    FROM employees
+    GROUP BY department
+    ORDER BY avg_salary DESC
+""")
+
+summary.show()
+```
+
 ### Important Notes
 
 1. **Use S3A paths** for all data access: `s3a://bucket/path/`
