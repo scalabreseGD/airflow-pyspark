@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- Metastore Configuration -->
+    <property>
+        <name>metastore.thrift.uris</name>
+        <value>thrift://hive-metastore:9083</value>
+        <description>Thrift URI for the remote metastore</description>
+    </property>
+
+    <property>
+        <name>metastore.warehouse.dir</name>
+        <value>/tmp/warehouse</value>
+        <description>Temporary local warehouse path - Spark will override this with s3a://warehouse/</description>
+    </property>
+
+    <property>
+        <name>metastore.task.threads.always</name>
+        <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask</value>
+    </property>
+
+    <property>
+        <name>metastore.expression.proxy</name>
+        <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+    </property>
+
+    <!-- Note: S3A implementation details not needed here -->
+    <!-- Spark handles all S3A operations for actual data access -->
+</configuration>

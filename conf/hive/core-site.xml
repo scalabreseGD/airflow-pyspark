@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <!-- Minimal Hadoop configuration for Hive Metastore -->
+    <!-- S3A configuration not needed - Metastore only stores metadata in PostgreSQL -->
+    <!-- Spark handles all S3A operations for data files -->
+</configuration>
