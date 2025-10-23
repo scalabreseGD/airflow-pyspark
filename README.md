@@ -5,12 +5,14 @@ A fully functional, production-ready Docker Compose setup for Apache Spark with 
 ## Features
 
 - **Apache Spark 3.5.3** with master and worker nodes
-- **Hive Metastore 4.0.0** for metadata management
+- **Hive Metastore 3.1.3** with **Hadoop 3.3.4** for metadata management
 - **MinIO** as S3-compatible object storage
 - **PostgreSQL 14** as Hive Metastore backend
 - Full S3A protocol support for direct MinIO writes/reads
 - Complete Spark SQL integration with Hive tables
-- Pre-configured with all necessary JAR dependencies
+- **Hive External Tables** - table metadata in Hive, data in MinIO
+- **SparkSQL** examples with temporary views and complex queries
+- Pre-configured with all necessary JAR dependencies (AWS SDK, Hadoop AWS, PostgreSQL JDBC)
 - Health checks and automatic service orchestration
 
 ## Architecture
@@ -60,7 +62,25 @@ This comprehensive test validates:
 - Multiple file formats (Parquet, CSV)
 - Partitioned tables
 
-### 3. Submit Your Own Spark Jobs
+### 3. Explore Example Spark Jobs
+
+Try the included example jobs:
+
+```bash
+# Basic data processing - create sample data in MinIO
+./submit.sh create_sample_data.py
+
+# Filter and transform data with DataFrames
+./submit.sh filter_employees.py
+
+# SparkSQL with temporary views and complex queries
+./submit.sh sql_analysis.py
+
+# Hive External Tables - metadata in Hive, data in MinIO
+./submit.sh hive_external_tables.py
+```
+
+### 4. Submit Your Own Spark Jobs
 
 ```bash
 ./submit.sh your_script.py
@@ -148,6 +168,88 @@ spark.sql("""
     WHERE department = 'Engineering' AND year = 2024
 """).show()
 ```
+
+### Using SparkSQL with Temporary Views
+
+```python
+# Read data from MinIO
+employees = spark.read.parquet("s3a://data/employees/")
+
+# Create temporary SQL view
+employees.createOrReplaceTempView("employees")
+
+# Run SQL queries with CASE statements, aggregations, etc.
+result = spark.sql("""
+    SELECT
+        name,
+        salary,
+        CASE
+            WHEN salary >= 100000 THEN 'Senior'
+            WHEN salary >= 90000 THEN 'Mid-Level'
+            ELSE 'Junior'
+        END as performance_tier
+    FROM employees
+    WHERE department = 'Engineering'
+    ORDER BY salary DESC
+""")
+
+# Aggregations with GROUP BY
+dept_stats = spark.sql("""
+    SELECT
+        department,
+        COUNT(*) as employee_count,
+        ROUND(AVG(salary), 2) as avg_salary,
+        MIN(salary) as min_salary,
+        MAX(salary) as max_salary
+    FROM employees
+    GROUP BY department
+    ORDER BY avg_salary DESC
+""")
+```
+
+See `spark-apps/sql_analysis.py` for a complete example.
+
+### Hive External Tables - Best of Both Worlds
+
+External tables provide persistent table definitions in Hive Metastore while keeping data in MinIO. This allows you to:
+- Query tables by name instead of full S3A paths
+- Keep data in MinIO (survives even if you DROP TABLE)
+- Share table definitions across multiple Spark jobs
+- Use catalog features (SHOW TABLES, DESCRIBE, etc.)
+
+```python
+# Create database
+spark.sql("CREATE DATABASE IF NOT EXISTS analytics")
+spark.sql("USE analytics")
+
+# Create external table pointing to existing data in MinIO
+spark.sql("""
+    CREATE EXTERNAL TABLE IF NOT EXISTS employees (
+        id INT,
+        name STRING,
+        age INT,
+        department STRING,
+        salary INT
+    )
+    STORED AS PARQUET
+    LOCATION 's3a://data/employees/'
+""")
+
+# Now query by table name (no need for full S3A paths!)
+spark.sql("SELECT * FROM employees WHERE salary >= 85000").show()
+
+# Tables persist across sessions
+spark.sql("SHOW TABLES").show()
+spark.sql("DESCRIBE EXTENDED employees").show()
+```
+
+**Important Notes:**
+- External tables store metadata in Hive, data stays in MinIO at the specified LOCATION
+- The `warehouse/analytics.db/` directory will be empty (expected behavior)
+- Data is stored at the LOCATION path (`s3a://data/employees/`)
+- Dropping external tables only removes metadata, not data
+
+See `spark-apps/hive_external_tables.py` for a comprehensive example.
 
 ## Configuration
 
@@ -293,16 +395,22 @@ Edit `conf/spark/spark-defaults.conf` to adjust:
 .
 ├── docker-compose.yml              # Main orchestration file
 ├── docker/
-│   └── spark/
-│       └── Dockerfile              # Custom Spark image with S3A JARs
+│   ├── spark/
+│   │   └── Dockerfile              # Custom Spark image with S3A JARs
+│   └── hive/
+│       └── Dockerfile              # Custom Hive Metastore with Hadoop 3.3.4
 ├── conf/
 │   ├── hive/
 │   │   ├── metastore-site.xml     # Hive Metastore configuration
-│   │   └── core-site.xml          # Hadoop core configuration
+│   │   └── core-site.xml          # Hadoop core S3A configuration
 │   └── spark/
 │       ├── hive-site.xml          # Spark Hive configuration
 │       └── spark-defaults.conf    # Spark default settings
 ├── spark-apps/
+│   ├── create_sample_data.py      # Create sample datasets
+│   ├── filter_employees.py        # DataFrame filtering example
+│   ├── sql_analysis.py            # SparkSQL with temporary views
+│   ├── hive_external_tables.py    # Hive external tables demo
 │   └── complete_test.py           # Comprehensive test suite
 ├── start.sh                       # Startup script
 ├── submit.sh                      # Job submission script
@@ -311,12 +419,18 @@ Edit `conf/spark/spark-defaults.conf` to adjust:
 
 ## Dependencies Included
 
-The custom Spark image includes:
+### Custom Spark Image
 - `hadoop-aws-3.3.4.jar` - S3A filesystem support
 - `aws-java-sdk-bundle-1.12.367.jar` - AWS SDK for S3 operations
 - `postgresql-42.7.3.jar` - PostgreSQL JDBC driver
 
-All dependencies are automatically downloaded during image build.
+### Custom Hive Metastore Image
+- **Hadoop 3.3.4** - Full Hadoop installation (upgraded from bundled 3.1.x)
+- `hadoop-aws-3.3.4.jar` - S3A filesystem support for Hive
+- `aws-java-sdk-bundle-1.12.367.jar` - AWS SDK for MinIO access
+- `postgresql-42.7.3.jar` - PostgreSQL JDBC driver with SCRAM-SHA-256 support
+
+All dependencies are automatically downloaded during image build. The Hive Metastore uses a custom Dockerfile that replaces the bundled Hadoop 3.1.x with Hadoop 3.3.4 for compatibility with modern AWS libraries.
 
 ## Advanced Usage
 
@@ -344,6 +458,59 @@ To allow external applications to connect:
 1. Update service names to use `localhost` instead of internal names
 2. Adjust port mappings in `docker-compose.yml`
 3. Update configuration files with external endpoints
+
+## Frequently Asked Questions
+
+### Why is `warehouse/analytics.db/` empty in MinIO?
+
+This is **expected behavior** for external tables. When you create an external table with a `LOCATION` clause:
+- Table **metadata** is stored in Hive Metastore
+- Table **data** is stored at the specified `LOCATION` (e.g., `s3a://data/employees/`)
+- The `warehouse/analytics.db/` directory is just a placeholder for the database
+
+To see data in the `warehouse` bucket, create a **managed table** instead:
+```python
+df.write.mode("overwrite").saveAsTable("my_managed_table")
+```
+
+### What's the difference between External and Managed tables?
+
+**External Tables:**
+- Metadata in Hive, data at custom LOCATION
+- `DROP TABLE` only removes metadata, not data
+- Data survives table deletion
+- Use for shared data or data you don't want Hive to manage
+
+**Managed Tables:**
+- Both metadata and data managed by Hive
+- Data stored in `s3a://warehouse/database.db/table_name/`
+- `DROP TABLE` removes both metadata and data
+- Use for temporary or Hive-exclusive data
+
+### How do I verify my Hive tables?
+
+```bash
+# Connect to Spark and check tables
+docker exec -it spark-master /opt/spark/bin/pyspark
+
+# In PySpark:
+spark.sql("SHOW DATABASES").show()
+spark.sql("USE analytics")
+spark.sql("SHOW TABLES").show()
+spark.sql("DESCRIBE EXTENDED employees").show()
+```
+
+### How do I check data in MinIO?
+
+```bash
+# List data bucket contents
+docker exec minio-setup mc ls myminio/data/ --recursive
+
+# List warehouse bucket contents
+docker exec minio-setup mc ls myminio/warehouse/ --recursive
+```
+
+Or use the MinIO Console at http://localhost:9001 (admin/admin123)
 
 ## Support and Documentation
 
