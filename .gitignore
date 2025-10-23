@@ -1,7 +1,6 @@
 # Docker volumes and data
 volumes/
 spark-data/
-notebooks/
 
 # Python
 __pycache__/
