@@ -1,41 +1,41 @@
-FROM apache/spark:3.5.3
+FROM jupyter/base-notebook:latest
 
 USER root
 
-# Install build dependencies and Python 3.11 from source
+# Install Java 11 (required for Spark 3.5.3)
 RUN apt-get update && \
-    apt-get install -y wget curl build-essential libssl-dev zlib1g-dev \
-    libbz2-dev libreadline-dev libsqlite3-dev libncursesw5-dev \
-    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev && \
-    cd /tmp && \
-    wget https://www.python.org/ftp/python/3.11.6/Python-3.11.6.tgz && \
-    tar xzf Python-3.11.6.tgz && \
-    cd Python-3.11.6 && \
-    ./configure --enable-optimizations --with-ensurepip=install && \
-    make -j$(nproc) && \
-    make altinstall && \
-    cd /tmp && \
-    rm -rf Python-3.11.6* && \
-    apt-get remove -y build-essential && \
-    apt-get autoremove -y && \
+    apt-get install -y openjdk-11-jre-headless wget procps && \
     rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.11 as the default python3
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.11 1 && \
-    update-alternatives --set python3 /usr/local/bin/python3.11
+# Set Java home dynamically based on architecture
+RUN JAVA_HOME_PATH=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    echo "export JAVA_HOME=${JAVA_HOME_PATH}" >> /etc/profile.d/java.sh
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
 
-# Set PYSPARK_PYTHON to tell workers which Python to use
-ENV PYSPARK_PYTHON=/usr/bin/python3
-ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3
-
-# Set versions for dependencies (matching Spark 3.5.3's built-in Hadoop 3.3.4)
+# Set Spark version and download URL
+ENV SPARK_VERSION=3.5.3
 ENV HADOOP_VERSION=3.3.4
 ENV AWS_SDK_VERSION=1.12.367
 ENV POSTGRES_JDBC_VERSION=42.7.3
 ENV HIVE_VERSION=3.1.3
 
+# Download and install Spark 3.5.3
+RUN cd /tmp && \
+    wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz && \
+    tar xzf spark-${SPARK_VERSION}-bin-hadoop3.tgz && \
+    mv spark-${SPARK_VERSION}-bin-hadoop3 /usr/local/spark && \
+    rm spark-${SPARK_VERSION}-bin-hadoop3.tgz
+
+# Set Spark environment variables
+ENV SPARK_HOME=/usr/local/spark
+ENV PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
+ENV PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.9.7-src.zip:$PYTHONPATH
+ENV PYSPARK_PYTHON=/usr/bin/python3
+ENV PYSPARK_DRIVER_PYTHON=jupyter
+ENV PYSPARK_DRIVER_PYTHON_OPTS=notebook
+
 # Download required JAR files for S3A support, AWS, and Hive
-RUN cd /opt/spark/jars && \
+RUN cd /usr/local/spark/jars && \
     # Hadoop AWS (S3A support)
     wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
     # AWS SDK Bundle
@@ -50,13 +50,15 @@ RUN cd /opt/spark/jars && \
     wget -q https://repo1.maven.org/maven2/org/apache/hive/hive-standalone-metastore/${HIVE_VERSION}/hive-standalone-metastore-${HIVE_VERSION}.jar && \
     wget -q https://repo1.maven.org/maven2/org/apache/thrift/libthrift/0.12.0/libthrift-0.12.0.jar
 
-# Verify JARs were downloaded
-RUN ls -lh /opt/spark/jars/hadoop-aws-* && \
-    ls -lh /opt/spark/jars/aws-java-sdk-bundle-* && \
-    ls -lh /opt/spark/jars/postgresql-* && \
-    ls -lh /opt/spark/jars/hive-* && \
-    ls -lh /opt/spark/jars/libthrift-*
+# Install PySpark and other Python packages
+USER ${NB_UID}
+RUN pip install --no-cache-dir \
+    pyspark==${SPARK_VERSION} \
+    pandas \
+    pyarrow \
+    matplotlib \
+    seaborn
 
-USER spark
+WORKDIR /home/jovyan
 
-WORKDIR /opt/spark
+# Keep the original entrypoint and cmd from base image
