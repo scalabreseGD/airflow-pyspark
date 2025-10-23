@@ -201,6 +201,7 @@ services:
       - ./conf/spark/hive-site.xml:/usr/local/spark/conf/hive-site.xml:ro
     networks:
       - spark-network
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
 
 networks:
   spark-network:
