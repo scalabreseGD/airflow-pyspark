@@ -1,46 +1,46 @@
-event_id,campaign_id,customer_id,event_timestamp,event_type,device_type,location,attributed_revenue,_source_system,_ingestion_timestamp,_file_name,_record_offset
-EVT00001,CAMP001,CUST10001,2025-10-18 09:15:30,impression,desktop,New York,0.00,marketing_platform,2025-10-18 10:00:00,events_20251018.json,0
-EVT00002,CAMP001,CUST10001,2025-10-18 09:17:45,click,desktop,New York,0.00,marketing_platform,2025-10-18 10:00:00,events_20251018.json,1
-EVT00003,CAMP001,CUST10001,2025-10-20 14:32:15,conversion,desktop,New York,151.58,marketing_platform,2025-10-20 15:00:00,events_20251020.json,0
-EVT00004,CAMP002,CUST10003,2025-10-19 16:22:10,impression,mobile,Los Angeles,0.00,marketing_platform,2025-10-19 17:00:00,events_20251019.json,0
-EVT00005,CAMP002,CUST10003,2025-10-20 16:12:08,conversion,mobile,Los Angeles,230.05,marketing_platform,2025-10-20 17:00:00,events_20251020.json,1
-EVT00006,CAMP003,CUST10004,2025-10-18 14:45:20,impression,tablet,Chicago,0.00,marketing_platform,2025-10-18 15:00:00,events_20251018.json,2
-EVT00007,CAMP003,CUST10004,2025-10-18 14:48:33,click,tablet,Chicago,0.00,marketing_platform,2025-10-18 15:00:00,events_20251018.json,3
-EVT00008,CAMP003,CUST10004,2025-10-20 09:23:45,conversion,tablet,Chicago,569.43,marketing_platform,2025-10-20 10:00:00,events_20251020.json,2
-EVT00009,CAMP004,CUST10005,2025-10-19 11:20:15,impression,mobile,Houston,0.00,marketing_platform,2025-10-19 12:00:00,events_20251019.json,1
-EVT00010,CAMP004,CUST10005,2025-10-19 11:23:40,click,mobile,Houston,0.00,marketing_platform,2025-10-19 12:00:00,events_20251019.json,2
-EVT00011,CAMP005,CUST10006,2025-10-18 18:30:22,impression,mobile,Phoenix,0.00,marketing_platform,2025-10-18 19:00:00,events_20251018.json,4
-EVT00012,CAMP005,CUST10006,2025-10-18 18:35:50,click,mobile,Phoenix,0.00,marketing_platform,2025-10-18 19:00:00,events_20251018.json,5
-EVT00013,CAMP006,CUST10007,2025-10-20 22:15:45,impression,desktop,Philadelphia,0.00,marketing_platform,2025-10-20 23:00:00,events_20251020.json,3
-EVT00014,CAMP006,CUST10007,2025-10-21 14:28:55,conversion,desktop,Philadelphia,76.93,marketing_platform,2025-10-21 15:00:00,events_20251021.json,0
-EVT00015,CAMP001,CUST10008,2025-10-20 12:40:18,impression,desktop,San Antonio,0.00,marketing_platform,2025-10-20 13:00:00,events_20251020.json,4
-EVT00016,CAMP001,CUST10008,2025-10-20 12:42:55,click,desktop,San Antonio,0.00,marketing_platform,2025-10-20 13:00:00,events_20251020.json,5
-EVT00017,CAMP001,CUST10008,2025-10-21 16:55:40,conversion,desktop,San Antonio,457.23,marketing_platform,2025-10-21 17:00:00,events_20251021.json,1
-EVT00018,CAMP007,CUST10009,2025-10-18 10:05:30,impression,mobile,San Diego,0.00,marketing_platform,2025-10-18 11:00:00,events_20251018.json,6
-EVT00019,CAMP007,CUST10009,2025-10-18 10:08:15,click,mobile,San Diego,0.00,marketing_platform,2025-10-18 11:00:00,events_20251018.json,7
-EVT00020,CAMP007,CUST10009,2025-10-21 18:20:17,conversion,mobile,San Diego,129.76,marketing_platform,2025-10-21 19:00:00,events_20251021.json,2
-EVT00021,CAMP002,CUST10010,2025-10-21 15:22:40,impression,tablet,Dallas,0.00,marketing_platform,2025-10-21 16:00:00,events_20251021.json,3
-EVT00022,CAMP002,CUST10010,2025-10-22 08:45:30,conversion,tablet,Dallas,284.19,marketing_platform,2025-10-22 09:00:00,events_20251022.json,0
-EVT00023,CAMP008,CUST10011,2025-10-20 19:45:12,impression,mobile,San Jose,0.00,marketing_platform,2025-10-20 20:00:00,events_20251020.json,6
-EVT00024,CAMP008,CUST10011,2025-10-20 19:50:30,click,mobile,San Jose,0.00,marketing_platform,2025-10-20 20:00:00,events_20251020.json,7
-EVT00025,CAMP009,CUST10002,2025-10-21 08:15:20,impression,desktop,Austin,0.00,marketing_platform,2025-10-21 09:00:00,events_20251021.json,4
-EVT00026,CAMP009,CUST10002,2025-10-21 08:20:45,click,desktop,Austin,0.00,marketing_platform,2025-10-21 09:00:00,events_20251021.json,5
-EVT00027,CAMP009,CUST10002,2025-10-22 12:33:28,conversion,desktop,Austin,82.21,marketing_platform,2025-10-22 13:00:00,events_20251022.json,1
-EVT00028,CAMP010,CUST10012,2025-10-21 20:10:35,impression,desktop,Jacksonville,0.00,marketing_platform,2025-10-21 21:00:00,events_20251021.json,6
-EVT00029,CAMP010,CUST10012,2025-10-21 20:15:50,click,desktop,Jacksonville,0.00,marketing_platform,2025-10-21 21:00:00,events_20251021.json,7
-EVT00030,CAMP003,CUST10013,2025-10-22 14:30:20,impression,mobile,Fort Worth,0.00,marketing_platform,2025-10-22 15:00:00,events_20251022.json,2
-EVT00031,CAMP003,CUST10013,2025-10-23 09:10:05,conversion,mobile,Fort Worth,528.26,marketing_platform,2025-10-23 10:00:00,events_20251023.json,0
-EVT00032,CAMP011,CUST10014,2025-10-22 16:45:10,impression,mobile,Columbus,0.00,marketing_platform,2025-10-22 17:00:00,events_20251022.json,3
-EVT00033,CAMP011,CUST10014,2025-10-22 16:50:25,click,mobile,Columbus,0.00,marketing_platform,2025-10-22 17:00:00,events_20251022.json,4
-EVT00034,CAMP011,CUST10014,2025-10-23 11:25:38,conversion,mobile,Columbus,106.49,marketing_platform,2025-10-23 12:00:00,events_20251023.json,1
-EVT00035,CAMP012,CUST10015,2025-10-21 13:20:45,impression,desktop,Charlotte,0.00,marketing_platform,2025-10-21 14:00:00,events_20251021.json,8
-EVT00036,CAMP012,CUST10015,2025-10-21 13:25:30,click,desktop,Charlotte,0.00,marketing_platform,2025-10-21 14:00:00,events_20251021.json,9
-EVT00037,CAMP001,CUST10016,2025-10-23 14:30:15,impression,tablet,Indianapolis,0.00,marketing_platform,2025-10-23 15:00:00,events_20251023.json,2
-EVT00038,CAMP001,CUST10016,2025-10-23 14:35:40,click,tablet,Indianapolis,0.00,marketing_platform,2025-10-23 15:00:00,events_20251023.json,3
-EVT00039,CAMP001,CUST10016,2025-10-23 18:55:12,conversion,tablet,Indianapolis,215.14,marketing_platform,2025-10-23 19:00:00,events_20251023.json,4
-EVT00040,CAMP005,CUST10017,2025-10-19 11:15:20,impression,mobile,Seattle,0.00,marketing_platform,2025-10-19 12:00:00,events_20251019.json,3
-EVT00041,CAMP005,CUST10017,2025-10-19 11:20:45,click,mobile,Seattle,0.00,marketing_platform,2025-10-19 12:00:00,events_20251019.json,4
-EVT00042,CAMP004,CUST10005,2025-10-23 16:30:50,conversion,mobile,Houston,351.87,marketing_platform,2025-10-23 17:00:00,events_20251023.json,5
-EVT00043,CAMP002,CUST10003,2025-10-22 15:18:52,unsubscribe,mobile,Los Angeles,0.00,marketing_platform,2025-10-22 16:00:00,events_20251022.json,5
-EVT00044,CAMP006,CUST10018,2025-10-23 17:40:22,impression,desktop,Denver,0.00,marketing_platform,2025-10-23 18:00:00,events_20251023.json,6
-EVT00045,CAMP006,CUST10018,2025-10-23 17:45:50,click,desktop,Denver,0.00,marketing_platform,2025-10-23 18:00:00,events_20251023.json,7
+event_id|campaign_id|customer_id|event_timestamp|event_type|device_type|location|attributed_revenue|_source_system|_ingestion_timestamp|_file_name|_record_offset
+EVT00001|CAMP001|CUST10001|2025-10-18 09:15:30|impression|desktop|New York|0.00|marketing_platform|2025-10-18 10:00:00|events_20251018.json|0
+EVT00002|CAMP001|CUST10001|2025-10-18 09:17:45|click|desktop|New York|0.00|marketing_platform|2025-10-18 10:00:00|events_20251018.json|1
+EVT00003|CAMP001|CUST10001|2025-10-20 14:32:15|conversion|desktop|New York|151.58|marketing_platform|2025-10-20 15:00:00|events_20251020.json|0
+EVT00004|CAMP002|CUST10003|2025-10-19 16:22:10|impression|mobile|Los Angeles|0.00|marketing_platform|2025-10-19 17:00:00|events_20251019.json|0
+EVT00005|CAMP002|CUST10003|2025-10-20 16:12:08|conversion|mobile|Los Angeles|230.05|marketing_platform|2025-10-20 17:00:00|events_20251020.json|1
+EVT00006|CAMP003|CUST10004|2025-10-18 14:45:20|impression|tablet|Chicago|0.00|marketing_platform|2025-10-18 15:00:00|events_20251018.json|2
+EVT00007|CAMP003|CUST10004|2025-10-18 14:48:33|click|tablet|Chicago|0.00|marketing_platform|2025-10-18 15:00:00|events_20251018.json|3
+EVT00008|CAMP003|CUST10004|2025-10-20 09:23:45|conversion|tablet|Chicago|569.43|marketing_platform|2025-10-20 10:00:00|events_20251020.json|2
+EVT00009|CAMP004|CUST10005|2025-10-19 11:20:15|impression|mobile|Houston|0.00|marketing_platform|2025-10-19 12:00:00|events_20251019.json|1
+EVT00010|CAMP004|CUST10005|2025-10-19 11:23:40|click|mobile|Houston|0.00|marketing_platform|2025-10-19 12:00:00|events_20251019.json|2
+EVT00011|CAMP005|CUST10006|2025-10-18 18:30:22|impression|mobile|Phoenix|0.00|marketing_platform|2025-10-18 19:00:00|events_20251018.json|4
+EVT00012|CAMP005|CUST10006|2025-10-18 18:35:50|click|mobile|Phoenix|0.00|marketing_platform|2025-10-18 19:00:00|events_20251018.json|5
+EVT00013|CAMP006|CUST10007|2025-10-20 22:15:45|impression|desktop|Philadelphia|0.00|marketing_platform|2025-10-20 23:00:00|events_20251020.json|3
+EVT00014|CAMP006|CUST10007|2025-10-21 14:28:55|conversion|desktop|Philadelphia|76.93|marketing_platform|2025-10-21 15:00:00|events_20251021.json|0
+EVT00015|CAMP001|CUST10008|2025-10-20 12:40:18|impression|desktop|San Antonio|0.00|marketing_platform|2025-10-20 13:00:00|events_20251020.json|4
+EVT00016|CAMP001|CUST10008|2025-10-20 12:42:55|click|desktop|San Antonio|0.00|marketing_platform|2025-10-20 13:00:00|events_20251020.json|5
+EVT00017|CAMP001|CUST10008|2025-10-21 16:55:40|conversion|desktop|San Antonio|457.23|marketing_platform|2025-10-21 17:00:00|events_20251021.json|1
+EVT00018|CAMP007|CUST10009|2025-10-18 10:05:30|impression|mobile|San Diego|0.00|marketing_platform|2025-10-18 11:00:00|events_20251018.json|6
+EVT00019|CAMP007|CUST10009|2025-10-18 10:08:15|click|mobile|San Diego|0.00|marketing_platform|2025-10-18 11:00:00|events_20251018.json|7
+EVT00020|CAMP007|CUST10009|2025-10-21 18:20:17|conversion|mobile|San Diego|129.76|marketing_platform|2025-10-21 19:00:00|events_20251021.json|2
+EVT00021|CAMP002|CUST10010|2025-10-21 15:22:40|impression|tablet|Dallas|0.00|marketing_platform|2025-10-21 16:00:00|events_20251021.json|3
+EVT00022|CAMP002|CUST10010|2025-10-22 08:45:30|conversion|tablet|Dallas|284.19|marketing_platform|2025-10-22 09:00:00|events_20251022.json|0
+EVT00023|CAMP008|CUST10011|2025-10-20 19:45:12|impression|mobile|San Jose|0.00|marketing_platform|2025-10-20 20:00:00|events_20251020.json|6
+EVT00024|CAMP008|CUST10011|2025-10-20 19:50:30|click|mobile|San Jose|0.00|marketing_platform|2025-10-20 20:00:00|events_20251020.json|7
+EVT00025|CAMP009|CUST10002|2025-10-21 08:15:20|impression|desktop|Austin|0.00|marketing_platform|2025-10-21 09:00:00|events_20251021.json|4
+EVT00026|CAMP009|CUST10002|2025-10-21 08:20:45|click|desktop|Austin|0.00|marketing_platform|2025-10-21 09:00:00|events_20251021.json|5
+EVT00027|CAMP009|CUST10002|2025-10-22 12:33:28|conversion|desktop|Austin|82.21|marketing_platform|2025-10-22 13:00:00|events_20251022.json|1
+EVT00028|CAMP010|CUST10012|2025-10-21 20:10:35|impression|desktop|Jacksonville|0.00|marketing_platform|2025-10-21 21:00:00|events_20251021.json|6
+EVT00029|CAMP010|CUST10012|2025-10-21 20:15:50|click|desktop|Jacksonville|0.00|marketing_platform|2025-10-21 21:00:00|events_20251021.json|7
+EVT00030|CAMP003|CUST10013|2025-10-22 14:30:20|impression|mobile|Fort Worth|0.00|marketing_platform|2025-10-22 15:00:00|events_20251022.json|2
+EVT00031|CAMP003|CUST10013|2025-10-23 09:10:05|conversion|mobile|Fort Worth|528.26|marketing_platform|2025-10-23 10:00:00|events_20251023.json|0
+EVT00032|CAMP011|CUST10014|2025-10-22 16:45:10|impression|mobile|Columbus|0.00|marketing_platform|2025-10-22 17:00:00|events_20251022.json|3
+EVT00033|CAMP011|CUST10014|2025-10-22 16:50:25|click|mobile|Columbus|0.00|marketing_platform|2025-10-22 17:00:00|events_20251022.json|4
+EVT00034|CAMP011|CUST10014|2025-10-23 11:25:38|conversion|mobile|Columbus|106.49|marketing_platform|2025-10-23 12:00:00|events_20251023.json|1
+EVT00035|CAMP012|CUST10015|2025-10-21 13:20:45|impression|desktop|Charlotte|0.00|marketing_platform|2025-10-21 14:00:00|events_20251021.json|8
+EVT00036|CAMP012|CUST10015|2025-10-21 13:25:30|click|desktop|Charlotte|0.00|marketing_platform|2025-10-21 14:00:00|events_20251021.json|9
+EVT00037|CAMP001|CUST10016|2025-10-23 14:30:15|impression|tablet|Indianapolis|0.00|marketing_platform|2025-10-23 15:00:00|events_20251023.json|2
+EVT00038|CAMP001|CUST10016|2025-10-23 14:35:40|click|tablet|Indianapolis|0.00|marketing_platform|2025-10-23 15:00:00|events_20251023.json|3
+EVT00039|CAMP001|CUST10016|2025-10-23 18:55:12|conversion|tablet|Indianapolis|215.14|marketing_platform|2025-10-23 19:00:00|events_20251023.json|4
+EVT00040|CAMP005|CUST10017|2025-10-19 11:15:20|impression|mobile|Seattle|0.00|marketing_platform|2025-10-19 12:00:00|events_20251019.json|3
+EVT00041|CAMP005|CUST10017|2025-10-19 11:20:45|click|mobile|Seattle|0.00|marketing_platform|2025-10-19 12:00:00|events_20251019.json|4
+EVT00042|CAMP004|CUST10005|2025-10-23 16:30:50|conversion|mobile|Houston|351.87|marketing_platform|2025-10-23 17:00:00|events_20251023.json|5
+EVT00043|CAMP002|CUST10003|2025-10-22 15:18:52|unsubscribe|mobile|Los Angeles|0.00|marketing_platform|2025-10-22 16:00:00|events_20251022.json|5
+EVT00044|CAMP006|CUST10018|2025-10-23 17:40:22|impression|desktop|Denver|0.00|marketing_platform|2025-10-23 18:00:00|events_20251023.json|6
+EVT00045|CAMP006|CUST10018|2025-10-23 17:45:50|click|desktop|Denver|0.00|marketing_platform|2025-10-23 18:00:00|events_20251023.json|7
