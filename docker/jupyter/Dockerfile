@@ -59,6 +59,10 @@ RUN pip install --no-cache-dir \
     matplotlib \
     seaborn
 
+# Create IPython startup directory and copy startup script
+RUN mkdir -p /home/jovyan/.ipython/profile_default/startup
+COPY --chown=${NB_UID}:${NB_GID} startup/00-spark-init.py /home/jovyan/.ipython/profile_default/startup/
+
 WORKDIR /home/jovyan
 
 # Keep the original entrypoint and cmd from base image
