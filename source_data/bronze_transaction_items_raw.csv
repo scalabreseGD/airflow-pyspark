@@ -1,0 +1,26 @@
+transaction_item_id,transaction_id,product_id,variant_id,quantity,unit_price,discount_percentage,tax_rate,return_quantity,return_reason,fulfillment_status,warehouse_id,_source_system,_ingestion_timestamp,_file_name,_record_offset
+TXNI0001,TXN001,PROD1001,VAR5001,2,45.00,10.00,0.08,0,,shipped,WH001,ecommerce_api,2025-10-20 15:00:00,transaction_items_20251020.json,0
+TXNI0002,TXN001,PROD1005,VAR5012,1,65.50,10.00,0.08,0,,shipped,WH001,ecommerce_api,2025-10-20 15:00:00,transaction_items_20251020.json,1
+TXNI0003,TXN002,PROD1023,VAR5045,1,89.99,0.00,0.08,0,,shipped,WH002,ecommerce_api,2025-10-20 16:00:00,transaction_items_20251020.json,2
+TXNI0004,TXN003,PROD1012,VAR5023,3,78.25,10.00,0.08,0,,completed,STR001,pos_system,2025-10-20 17:00:00,transaction_items_20251020.json,3
+TXNI0005,TXN004,PROD1008,VAR5015,1,325.00,10.00,0.08,0,,processing,WH001,ecommerce_api,2025-10-20 10:00:00,transaction_items_20251020.json,4
+TXNI0006,TXN004,PROD1015,VAR5028,2,121.40,10.00,0.08,0,,processing,WH001,ecommerce_api,2025-10-20 10:00:00,transaction_items_20251020.json,5
+TXNI0007,TXN005,PROD1034,VAR5067,1,42.50,10.00,0.08,0,,shipped,WH003,marketplace_api,2025-10-20 12:00:00,transaction_items_20251020.json,6
+TXNI0008,TXN006,PROD1019,VAR5038,2,99.00,0.00,0.08,0,,shipped,WH002,ecommerce_api,2025-10-21 11:00:00,transaction_items_20251021.json,0
+TXNI0009,TXN007,PROD1027,VAR5052,1,325.99,0.00,0.08,0,,cancelled,WH001,ecommerce_api,2025-10-21 14:00:00,transaction_items_20251021.json,1
+TXNI0010,TXN008,PROD1041,VAR5078,2,39.25,10.00,0.08,0,,completed,STR002,pos_system,2025-10-21 15:00:00,transaction_items_20251021.json,2
+TXNI0011,TXN009,PROD1003,VAR5007,3,150.08,10.00,0.08,0,,shipped,WH001,ecommerce_api,2025-10-21 17:00:00,transaction_items_20251021.json,3
+TXNI0012,TXN010,PROD1045,VAR5089,1,112.75,0.00,0.08,0,,processing,WH002,ecommerce_api,2025-10-21 19:00:00,transaction_items_20251021.json,4
+TXNI0013,TXN011,PROD1038,VAR5073,1,289.99,10.00,0.08,0,,shipped,WH003,marketplace_api,2025-10-22 09:00:00,transaction_items_20251022.json,0
+TXNI0014,TXN012,PROD1052,VAR5102,1,67.80,0.00,0.08,0,,shipped,WH001,ecommerce_api,2025-10-22 13:00:00,transaction_items_20251022.json,1
+TXNI0015,TXN013,PROD1029,VAR5056,4,39.10,10.00,0.08,1,defective,completed,STR001,pos_system,2025-10-22 16:00:00,transaction_items_20251022.json,2
+TXNI0016,TXN014,PROD1007,VAR5014,2,446.25,10.00,0.08,0,,pending,WH001,ecommerce_api,2025-10-22 18:00:00,transaction_items_20251022.json,3
+TXNI0017,TXN015,PROD1062,VAR5121,2,67.10,10.00,0.08,0,,shipped,WH002,ecommerce_api,2025-10-22 20:00:00,transaction_items_20251022.json,4
+TXNI0018,TXN016,PROD1014,VAR5027,1,523.75,10.00,0.08,0,,processing,WH001,ecommerce_api,2025-10-23 10:00:00,transactions_20251023.json,0
+TXNI0019,TXN017,PROD1048,VAR5094,2,49.30,0.00,0.08,0,,completed,STR003,pos_system,2025-10-23 12:00:00,transactions_20251023.json,1
+TXNI0020,TXN018,PROD1033,VAR5065,3,71.77,10.00,0.08,0,,shipped,WH003,marketplace_api,2025-10-23 14:00:00,transactions_20251023.json,2
+TXNI0021,TXN019,PROD1056,VAR5110,1,345.80,10.00,0.08,0,,processing,WH001,ecommerce_api,2025-10-23 17:00:00,transactions_20251023.json,3
+TXNI0022,TXN020,PROD1071,VAR5138,2,94.98,0.00,0.08,0,,shipped,WH002,ecommerce_api,2025-10-23 19:00:00,transactions_20251023.json,4
+TXNI0023,TXN003,PROD1089,VAR5167,1,18.50,0.00,0.08,0,,completed,STR001,pos_system,2025-10-20 17:00:00,transaction_items_20251020.json,7
+TXNI0024,TXN009,PROD1092,VAR5173,1,25.00,0.00,0.08,1,changed_mind,returned,WH001,ecommerce_api,2025-10-21 17:00:00,transaction_items_20251021.json,5
+TXNI0025,TXN016,PROD1104,VAR5189,3,33.33,0.00,0.08,0,,processing,WH001,ecommerce_api,2025-10-23 10:00:00,transactions_20251023.json,1

@@ -1,0 +1,21 @@
+transaction_id,customer_id,transaction_timestamp,channel,store_id,payment_method,payment_status,subtotal,tax_amount,shipping_cost,discount_amount,total_amount,currency,loyalty_points_earned,loyalty_points_redeemed,coupon_codes,_source_system,_ingestion_timestamp,_file_name,_record_offset
+TXN001,CUST10001,2025-10-20 14:32:15,online,,credit_card,completed,145.50,11.64,8.99,14.55,151.58,USD,152,0,"FALL2025",ecommerce_api,2025-10-20 15:00:00,transactions_20251020.json,0
+TXN002,CUST10002,2025-10-20 15:45:22,mobile,,paypal,completed,89.99,7.20,0.00,0.00,97.19,USD,97,0,,ecommerce_api,2025-10-20 16:00:00,transactions_20251020.json,1
+TXN003,CUST10003,2025-10-20 16:12:08,in-store,STR001,cash,completed,234.75,18.78,0.00,23.48,230.05,USD,230,50,,pos_system,2025-10-20 17:00:00,transactions_20251020.json,2
+TXN004,CUST10004,2025-10-20 09:23:45,online,,credit_card,completed,567.80,45.42,12.99,56.78,569.43,USD,569,0,"VIP10,FREESHIP",ecommerce_api,2025-10-20 10:00:00,transactions_20251020.json,3
+TXN005,CUST10005,2025-10-20 11:56:33,marketplace,,amazon_pay,completed,42.50,3.40,0.00,4.25,41.65,USD,42,0,,marketplace_api,2025-10-20 12:00:00,transactions_20251020.json,4
+TXN006,CUST10001,2025-10-21 10:15:20,mobile,,apple_pay,completed,198.00,15.84,9.99,0.00,223.83,USD,224,0,,ecommerce_api,2025-10-21 11:00:00,transactions_20251021.json,0
+TXN007,CUST10006,2025-10-21 13:42:11,online,,credit_card,failed,325.99,26.08,14.99,0.00,367.06,USD,0,0,,ecommerce_api,2025-10-21 14:00:00,transactions_20251021.json,1
+TXN008,CUST10007,2025-10-21 14:28:55,in-store,STR002,debit_card,completed,78.50,6.28,0.00,7.85,76.93,USD,77,0,"INSTORE15",pos_system,2025-10-21 15:00:00,transactions_20251021.json,2
+TXN009,CUST10008,2025-10-21 16:55:40,online,,paypal,completed,450.25,36.02,15.99,45.03,457.23,USD,457,100,,ecommerce_api,2025-10-21 17:00:00,transactions_20251021.json,3
+TXN010,CUST10009,2025-10-21 18:20:17,mobile,,google_pay,completed,112.75,9.02,7.99,0.00,129.76,USD,130,0,,ecommerce_api,2025-10-21 19:00:00,transactions_20251021.json,4
+TXN011,CUST10010,2025-10-22 08:45:30,marketplace,,stripe,completed,289.99,23.20,0.00,29.00,284.19,USD,284,0,"MARKET20",marketplace_api,2025-10-22 09:00:00,transactions_20251022.json,0
+TXN012,CUST10002,2025-10-22 12:33:28,online,,credit_card,completed,67.80,5.42,8.99,0.00,82.21,USD,82,0,,ecommerce_api,2025-10-22 13:00:00,transactions_20251022.json,1
+TXN013,CUST10011,2025-10-22 15:18:52,in-store,STR001,cash,completed,156.40,12.51,0.00,15.64,153.27,USD,153,0,,pos_system,2025-10-22 16:00:00,transactions_20251022.json,2
+TXN014,CUST10012,2025-10-22 17:05:45,online,,paypal,pending,892.50,71.40,19.99,89.25,894.64,USD,0,0,"BIGBUY10",ecommerce_api,2025-10-22 18:00:00,transactions_20251022.json,3
+TXN015,CUST10003,2025-10-22 19:42:13,mobile,,apple_pay,completed,134.20,10.74,9.99,13.42,141.51,USD,142,0,,ecommerce_api,2025-10-22 20:00:00,transactions_20251022.json,4
+TXN016,CUST10013,2025-10-23 09:10:05,online,,credit_card,completed,523.75,41.90,14.99,52.38,528.26,USD,528,200,,ecommerce_api,2025-10-23 10:00:00,transactions_20251023.json,0
+TXN017,CUST10014,2025-10-23 11:25:38,in-store,STR003,debit_card,completed,98.60,7.89,0.00,0.00,106.49,USD,106,0,,pos_system,2025-10-23 12:00:00,transactions_20251023.json,1
+TXN018,CUST10015,2025-10-23 13:48:22,marketplace,,amazon_pay,completed,215.30,17.22,0.00,21.53,210.99,USD,211,0,"PRIME15",marketplace_api,2025-10-23 14:00:00,transactions_20251023.json,2
+TXN019,CUST10005,2025-10-23 16:30:50,online,,credit_card,completed,345.80,27.66,12.99,34.58,351.87,USD,352,0,,ecommerce_api,2025-10-23 17:00:00,transactions_20251023.json,3
+TXN020,CUST10016,2025-10-23 18:55:12,mobile,,google_pay,completed,189.95,15.20,9.99,0.00,215.14,USD,215,0,,ecommerce_api,2025-10-23 19:00:00,transactions_20251023.json,4

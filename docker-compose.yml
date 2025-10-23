@@ -27,6 +27,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    volumes:
+      - ./source_data:/tmp/source_data:ro
     entrypoint: >
       /bin/sh -c "
       echo 'Waiting for MinIO to be ready...';
@@ -36,7 +38,16 @@ services:
       /usr/bin/mc mb myminio/data --ignore-existing;
       /usr/bin/mc anonymous set public myminio/warehouse;
       /usr/bin/mc anonymous set public myminio/data;
-      echo 'MinIO buckets created successfully';
+      echo 'Uploading source data files...';
+      /usr/bin/mc cp /tmp/source_data/bronze_campaign_events_raw.csv myminio/data/source_data/bronze_campaign_events_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_customer_interactions_raw.csv myminio/data/source_data/bronze_customer_interactions_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_inventory_snapshots_raw.csv myminio/data/source_data/bronze_inventory_snapshots_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_marketing_campaigns_raw.csv myminio/data/source_data/bronze_marketing_campaigns_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_product_catalog_raw.csv myminio/data/source_data/bronze_product_catalog_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_subscriptions_raw.csv myminio/data/source_data/bronze_subscriptions_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_transaction_items_raw.csv myminio/data/source_data/bronze_transaction_items_raw.csv;
+      /usr/bin/mc cp /tmp/source_data/bronze_transactions_raw.csv myminio/data/source_data/bronze_transactions_raw.csv;
+      echo 'MinIO buckets created and source data uploaded successfully';
       exit 0;
       "
     networks:
