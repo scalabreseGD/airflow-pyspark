@@ -77,6 +77,7 @@ services:
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
+      SKIP_SCHEMA_INIT: "true"
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
         -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore

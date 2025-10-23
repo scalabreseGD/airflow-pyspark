@@ -1,7 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
 <configuration>
-    <!-- Minimal Hadoop configuration for Hive Metastore -->
-    <!-- S3A configuration not needed - Metastore only stores metadata in PostgreSQL -->
-    <!-- Spark handles all S3A operations for data files -->
+    <!-- S3A / MinIO Configuration for Hive Metastore -->
+    <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://minio:9000</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.access.key</name>
+        <value>admin</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.secret.key</name>
+        <value>admin123</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.connection.ssl.enabled</name>
+        <value>false</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.aws.credentials.provider</name>
+        <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+    </property>
 </configuration>
