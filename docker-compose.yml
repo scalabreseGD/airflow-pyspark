@@ -94,34 +94,17 @@ services:
     networks:
       - spark-network
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9083"]
+      test: ["CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/9083'"]
       interval: 10s
       timeout: 5s
       retries: 10
+    entrypoint: ["/bin/bash"]
     command: >
-      bash -c "
-      echo 'Waiting for PostgreSQL to be ready...';
-      until pg_isready -h postgres -U hive -d metastore; do
-        echo 'Waiting for postgres...';
-        sleep 2;
-      done;
-      echo 'PostgreSQL is ready';
-
-      echo 'Checking if schema needs initialization...';
-      export PGPASSWORD=hive123;
-      TABLE_COUNT=$$(psql -h postgres -U hive -d metastore -t -c \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='VERSION'\" 2>/dev/null | xargs);
-
-      if [ \"$$TABLE_COUNT\" = \"0\" ] || [ -z \"$$TABLE_COUNT\" ]; then
-        echo 'Initializing metastore schema...';
-        /opt/hive/bin/schematool -dbType postgres -initSchema --verbose;
-        if [ $$? -ne 0 ]; then
-          echo 'Schema initialization failed!';
-          exit 1;
-        fi;
-      else
-        echo 'Schema already initialized, skipping...';
-      fi;
-
+      -c "
+      export HIVE_CONF_DIR=/opt/hive/conf;
+      export HADOOP_CLIENT_OPTS=\"-Xmx1G -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore -Djavax.jdo.option.ConnectionUserName=hive -Djavax.jdo.option.ConnectionPassword=hive123\";
+      echo 'Waiting 5 seconds for PostgreSQL...';
+      sleep 5;
       echo 'Starting Hive Metastore...';
       /opt/hive/bin/hive --service metastore
       "
@@ -186,6 +169,28 @@ services:
       - ./conf/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
     networks:
       - spark-network
+
+  # Jupyter Notebook with PySpark
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter-pyspark
+    depends_on:
+      - spark-master
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - SPARK_MASTER=spark://spark-master:7077
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=admin123
+      - AWS_REGION=us-east-1
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./spark-apps:/home/jovyan/spark-apps:ro
+      - ./conf/spark/hive-site.xml:/usr/local/spark/conf/hive-site.xml:ro
+    networks:
+      - spark-network
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
 
 networks:
   spark-network:
