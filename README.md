@@ -174,10 +174,15 @@ The gold layer contains business-level aggregates optimized for reporting and an
 - Ready for BI tools
 
 **Tables**:
-- `customer_summary`
-- `product_performance`
-- `sales_metrics`
-- `marketing_effectiveness`
+- `product_performance` - Product sales performance and profitability metrics
+- `customer_360` - Comprehensive customer profiles with all touchpoints
+- `store_performance` - Store-level performance metrics
+- `subscription_health` - Subscription metrics and health indicators
+- `basket_analysis` - Market basket analysis and product associations
+- `campaign_roi_analysis` - Campaign performance and ROI metrics
+- `category_brand_performance` - Category and brand-level performance
+- `channel_attribution` - Multi-channel attribution analysis
+- `cohort_analysis` - Cohort-based customer analysis
 
 **Location**: `s3a://warehouse/gold.db/`
 
@@ -194,10 +199,14 @@ The gold layer contains business-level aggregates optimized for reporting and an
 │   ├── hive/                       # Hive Metastore configuration
 │   └── spark/                      # Spark configuration
 ├── dags/
-│   └── ingest_bronze_data_dag.py   # Airflow DAG for bronze ingestion
+│   ├── ingest_bronze_data_dag.py         # Bronze layer ingestion DAG
+│   ├── bronze_to_silver_pipeline_dag.py  # Bronze → Silver transformation DAG
+│   └── silver_to_gold_pipeline_dag.py    # Silver → Gold analytics DAG
 ├── spark-apps/
-│   ├── ingest_bronze_data.py       # Bronze layer ingestion job
-│   └── reset_bronze_tables.py      # Helper to reset bronze tables
+│   ├── ingest_bronze_data.py             # Bronze layer ingestion
+│   ├── bronze_to_silver_*.py             # Silver layer transformations (6 jobs)
+│   ├── gold_*.py                         # Gold layer analytics (9 jobs)
+│   └── validate_bronze_data.py           # Bronze data validation
 ├── notebooks/
 │   ├── create_bronze_tables.ipynb  # Create bronze layer tables
 │   ├── create_silver_tables.ipynb  # Create silver layer tables
@@ -428,14 +437,37 @@ spark.sql("SHOW TABLES").show()
 - Check credentials in configuration files
 - Ensure buckets exist (created automatically)
 
+## Running the Complete Pipeline
+
+### Bronze to Silver Transformation
+
+1. Open Airflow UI: http://localhost:8082 (admin / admin)
+2. Enable the `bronze_to_silver_pipeline` DAG
+3. Trigger the DAG manually
+
+This will:
+- Trigger bronze data ingestion
+- Validate bronze data
+- Transform all 6 tables to silver layer (parallel execution with concurrency 3)
+
+### Silver to Gold Analytics
+
+1. Open Airflow UI: http://localhost:8082
+2. Enable the `silver_to_gold_pipeline` DAG
+3. Trigger the DAG manually
+
+This will:
+- Generate 9 gold layer analytics tables (parallel execution with concurrency 3)
+- Product performance, customer 360, store metrics, and more
+
 ## Next Steps
 
-1. **Implement Silver Layer ETL**: Create Spark jobs to transform bronze to silver
-2. **Implement Gold Layer ETL**: Create aggregation jobs for gold layer
-3. **Schedule DAGs**: Set up daily/hourly schedules for ETL pipelines
-4. **Add Data Quality Checks**: Implement validation rules between layers
-5. **Set Up Monitoring**: Configure alerts for failed jobs
-6. **Connect BI Tools**: Integrate with Tableau, PowerBI, etc. to query gold tables
+1. **Schedule DAGs**: Set up daily/hourly schedules for automated pipelines
+2. **Add Data Quality Checks**: Implement additional validation rules between layers
+3. **Set Up Monitoring**: Configure alerts for failed jobs
+4. **Connect BI Tools**: Integrate with Tableau, PowerBI, etc. to query gold tables
+5. **Optimize Performance**: Tune Spark configurations for your workload
+6. **Add Data Governance**: Implement data lineage and quality metrics
 
 ## Best Practices
 

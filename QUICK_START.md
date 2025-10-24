@@ -158,9 +158,39 @@ spark.sql("""
 
 You now have raw data in the bronze layer. Next steps:
 
-### 1. Implement Silver Layer Transformations
+### 1. Run Bronze to Silver Pipeline
 
-Create a new Spark job: `spark-apps/process_silver.py`
+The silver layer transformations are already implemented. Run them via Airflow:
+
+**Option A: Via Airflow UI (Recommended)**
+1. Open Airflow: http://localhost:8082 (admin / admin)
+2. Find the `bronze_to_silver_pipeline` DAG
+3. Toggle it ON (unpause)
+4. Click "Trigger DAG" (play button)
+
+**What happens:**
+- Triggers bronze data ingestion
+- Validates bronze data
+- Transforms 6 tables to silver layer in parallel (concurrency: 3)
+- Tables: transactions, transaction_items, subscriptions, product_catalog, inventory_snapshots, customer_interactions
+
+### 2. Run Silver to Gold Pipeline
+
+The gold layer analytics are already implemented. Run them via Airflow:
+
+**Option A: Via Airflow UI (Recommended)**
+1. Open Airflow: http://localhost:8082 (admin / admin)
+2. Find the `silver_to_gold_pipeline` DAG
+3. Toggle it ON (unpause)
+4. Click "Trigger DAG" (play button)
+
+**What happens:**
+- Generates 9 gold analytics tables in parallel (concurrency: 3)
+- Tables: product_performance, customer_360, store_performance, subscription_health, basket_analysis, campaign_roi_analysis, category_brand_performance, channel_attribution, cohort_analysis
+
+### 3. (Optional) Create Custom Silver Layer Transformations
+
+If you want to add custom transformations, create: `spark-apps/custom_silver.py`
 
 ```python
 from pyspark.sql import SparkSession
@@ -198,99 +228,26 @@ finally:
 
 Submit it:
 ```bash
-./submit.sh process_silver.py
+./submit.sh custom_silver.py
 ```
 
-### 2. Implement Gold Layer Aggregations
+### 4. Schedule Your Pipelines
 
-Create: `spark-apps/process_gold.py`
+To run the pipelines automatically, edit the DAGs:
 
-```python
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import sum, count, avg, max, min
-
-spark = SparkSession.builder \
-    .appName("ProcessGoldLayer") \
-    .enableHiveSupport() \
-    .getOrCreate()
-
-try:
-    spark.sql("USE silver")
-
-    # Create customer summary
-    customer_summary = spark.sql("""
-        SELECT
-            t.customer_id,
-            COUNT(DISTINCT t.transaction_id) as total_transactions,
-            SUM(t.transaction_amount) as total_spent,
-            AVG(t.transaction_amount) as avg_transaction,
-            MAX(t.transaction_date) as last_transaction_date,
-            COUNT(DISTINCT s.subscription_id) as active_subscriptions
-        FROM transactions t
-        LEFT JOIN subscriptions s ON t.customer_id = s.customer_id
-        WHERE s.subscription_status = 'active'
-        GROUP BY t.customer_id
-    """)
-
-    # Write to gold
-    customer_summary.write \
-        .mode("overwrite") \
-        .insertInto("gold.customer_summary")
-
-    print(f"Created {customer_summary.count()} customer summaries")
-
-finally:
-    spark.stop()
-```
-
-### 3. Create Airflow DAGs for Silver and Gold
-
-Create: `dags/full_etl_pipeline.py`
-
-```python
-from airflow import DAG
-from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
-from datetime import datetime
-
-with DAG(
-    'full_etl_pipeline',
-    start_date=datetime(2024, 1, 1),
-    schedule_interval='@daily',
-    catchup=False,
-    tags=['etl', 'pipeline'],
-) as dag:
-
-    bronze_ingestion = SparkSubmitOperator(
-        task_id='ingest_bronze',
-        application='/opt/spark-apps/ingest_bronze_data.py',
-        conn_id='spark_default',
-    )
-
-    silver_processing = SparkSubmitOperator(
-        task_id='process_silver',
-        application='/opt/spark-apps/process_silver.py',
-        conn_id='spark_default',
-    )
-
-    gold_aggregation = SparkSubmitOperator(
-        task_id='process_gold',
-        application='/opt/spark-apps/process_gold.py',
-        conn_id='spark_default',
-    )
-
-    # Define pipeline: bronze -> silver -> gold
-    bronze_ingestion >> silver_processing >> gold_aggregation
-```
-
-### 4. Schedule Your Pipeline
-
-Edit the DAG to run daily:
-
+**For `bronze_to_silver_pipeline_dag.py`:**
 ```python
 schedule_interval='@daily',  # Runs at midnight daily
 # or
 schedule_interval='0 2 * * *',  # Runs at 2 AM daily
 ```
+
+**For `silver_to_gold_pipeline_dag.py`:**
+```python
+schedule_interval='0 3 * * *',  # Runs at 3 AM daily (after silver completes)
+```
+
+Or chain them together with `TriggerDagRunOperator` for automatic flow: bronze → silver → gold.
 
 ## Common Commands
 
@@ -360,18 +317,22 @@ docker exec -it spark-master /opt/spark/bin/pyspark
 ```
 .
 ├── dags/
-│   └── ingest_bronze_data_dag.py     # Bronze ingestion DAG
+│   ├── ingest_bronze_data_dag.py         # Bronze ingestion DAG
+│   ├── bronze_to_silver_pipeline_dag.py  # Bronze → Silver pipeline
+│   └── silver_to_gold_pipeline_dag.py    # Silver → Gold pipeline
 ├── spark-apps/
-│   ├── ingest_bronze_data.py         # Bronze ingestion job
-│   └── reset_bronze_tables.py        # Helper script
+│   ├── ingest_bronze_data.py             # Bronze ingestion
+│   ├── bronze_to_silver_*.py             # Silver transformations (6 jobs)
+│   ├── gold_*.py                         # Gold analytics (9 jobs)
+│   └── validate_bronze_data.py           # Data validation
 ├── notebooks/
-│   ├── create_bronze_tables.ipynb    # Create bronze schemas
-│   ├── create_silver_tables.ipynb    # Create silver schemas
-│   └── create_gold_tables.ipynb      # Create gold schemas
-├── source_data/                      # CSV source files
-├── start.sh                          # Start services
-├── submit.sh                         # Submit Spark jobs
-└── setup_airflow_connections.sh      # Configure Airflow
+│   ├── create_bronze_tables.ipynb        # Create bronze schemas
+│   ├── create_silver_tables.ipynb        # Create silver schemas
+│   └── create_gold_tables.ipynb          # Create gold schemas
+├── source_data/                          # CSV source files
+├── start.sh                              # Start services
+├── submit.sh                             # Submit Spark jobs
+└── setup_airflow_connections.sh          # Configure Airflow
 ```
 
 ## Data Flow

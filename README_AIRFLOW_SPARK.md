@@ -113,7 +113,7 @@ Run these notebooks in order:
 
 ## Existing DAGs
 
-### Bronze Data Ingestion DAG
+### 1. Bronze Data Ingestion DAG
 
 **File**: `dags/ingest_bronze_data_dag.py`
 
@@ -137,6 +137,79 @@ schedule_interval='@daily'  # Run daily at midnight
 # or
 schedule_interval='0 2 * * *'  # Run at 2 AM daily
 ```
+
+### 2. Bronze to Silver Pipeline DAG
+
+**File**: `dags/bronze_to_silver_pipeline_dag.py`
+
+**Purpose**: Orchestrates the complete bronze → silver transformation pipeline
+
+**Pipeline Flow:**
+1. **start_pipeline**: Initializes pipeline with logging
+2. **trigger_bronze_ingestion**: Triggers the `ingest_bronze_data` DAG
+3. **validate_bronze_data**: Validates bronze tables have data
+4. **Transform tasks (parallel)**: 6 parallel transformations with concurrency 3
+   - transform_transactions_to_silver
+   - transform_transaction_items_to_silver
+   - transform_subscriptions_to_silver
+   - transform_product_catalog_to_silver
+   - transform_inventory_snapshots_to_silver
+   - transform_customer_interactions_to_silver
+5. **complete_pipeline**: Finalizes pipeline with summary
+
+**Concurrency**: 3 parallel jobs (controlled by `concurrency=3`)
+
+**Spark Configuration**: Uses same config as standalone silver jobs:
+- 3 cores max per job
+- 3 executors with 1 core each
+- Full S3A/Hive Metastore integration
+
+**To run manually:**
+1. Open Airflow: http://localhost:8082
+2. Find `bronze_to_silver_pipeline` DAG
+3. Toggle it to "ON" (unpause)
+4. Click "Trigger DAG"
+
+### 3. Silver to Gold Pipeline DAG
+
+**File**: `dags/silver_to_gold_pipeline_dag.py`
+
+**Purpose**: Generates business-level analytics from silver layer
+
+**Pipeline Flow:**
+1. **start_pipeline**: Initializes pipeline with logging
+2. **Gold transformations (parallel)**: 9 parallel analytics jobs with concurrency 3
+   - transform_product_performance
+   - transform_customer_360
+   - transform_store_performance
+   - transform_subscription_health
+   - transform_basket_analysis
+   - transform_campaign_roi_analysis
+   - transform_category_brand_performance
+   - transform_channel_attribution
+   - transform_cohort_analysis
+3. **complete_pipeline**: Finalizes pipeline with summary
+
+**Concurrency**: 3 parallel jobs (controlled by `concurrency=3`)
+
+**Spark Configuration**: Uses same config as silver layer for consistency
+
+**Gold Tables Generated:**
+- `gold.product_performance` - Product sales and profitability metrics
+- `gold.customer_360` - Comprehensive customer profiles
+- `gold.store_performance` - Store-level KPIs
+- `gold.subscription_health` - Subscription metrics
+- `gold.basket_analysis` - Market basket associations
+- `gold.campaign_roi_analysis` - Campaign effectiveness
+- `gold.category_brand_performance` - Category/brand metrics
+- `gold.channel_attribution` - Multi-channel attribution
+- `gold.cohort_analysis` - Cohort-based customer analysis
+
+**To run manually:**
+1. Open Airflow: http://localhost:8082
+2. Find `silver_to_gold_pipeline` DAG
+3. Toggle it to "ON" (unpause)
+4. Click "Trigger DAG"
 
 **Configuration:**
 The DAG passes these Spark configs:
@@ -672,15 +745,32 @@ tags=['bronze', 'ingestion', 'production']
 - Configure SMTP in Airflow
 - Use Slack/PagerDuty operators
 
+## Complete Pipeline Architecture
+
+The project now includes a full Bronze → Silver → Gold pipeline:
+
+```
+Bronze Layer (Raw Data)
+    ↓
+[bronze_to_silver_pipeline]
+    ↓ (6 parallel jobs, concurrency: 3)
+Silver Layer (Cleaned & Validated)
+    ↓
+[silver_to_gold_pipeline]
+    ↓ (9 parallel analytics, concurrency: 3)
+Gold Layer (Business Analytics)
+```
+
 ## Next Steps
 
-1. **Create Silver DAGs**: Build DAGs for bronze → silver transformations
-2. **Create Gold DAGs**: Build DAGs for silver → gold aggregations
-3. **Schedule Pipelines**: Set appropriate `schedule_interval`
-4. **Add Data Quality**: Implement validation tasks
-5. **Set Up Alerts**: Configure email/Slack notifications
-6. **Monitor Performance**: Track job durations and optimize
-7. **Add Documentation**: Document each DAG's purpose and logic
+1. **Schedule Pipelines**: Set appropriate `schedule_interval` for automated runs
+   - Example: Bronze at midnight, Silver at 1 AM, Gold at 3 AM
+2. **Chain DAGs**: Use `TriggerDagRunOperator` to create bronze → silver → gold flow
+3. **Add Data Quality**: Implement additional validation tasks between layers
+4. **Set Up Alerts**: Configure email/Slack notifications for failures
+5. **Monitor Performance**: Track job durations and optimize Spark configs
+6. **Add Incremental Loading**: Implement date-based incremental processing
+7. **Connect BI Tools**: Integrate Tableau/PowerBI to query gold tables
 
 ## Additional Resources
 
