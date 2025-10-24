@@ -97,12 +97,6 @@ try:
                                 sep='|',
                                 header=True,
                                 inferSchema=False, quote='"')
-            # df = spark.read \
-            #     .option("header", "true") \
-            #     .option("inferSchema", "false") \
-            #     .option("quote", "\"") \
-            #     .csv(input_path)
-
             record_count = df.count()
             print(f"  ✓ Read {record_count} records from CSV")
 
@@ -116,7 +110,7 @@ try:
                     spark.sql(f"SHOW COLUMNS IN {full_table_name}").select('col_name').collect()]
 
             df = df.select([df[col] for col in cols])
-            # Insert into bronze table (append mode)
+
             print(f"  Inserting into table: {full_table_name}")
 
             df.write \

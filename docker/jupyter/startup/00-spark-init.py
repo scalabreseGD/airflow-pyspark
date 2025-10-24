@@ -13,6 +13,8 @@ spark = SparkSession.builder \
     .appName("Jupyter Spark Demo") \
     .master("spark://spark-master:7077") \
     .config("spark.sql.warehouse.dir", "s3a://warehouse/") \
+    .config("spark.cores.max", "2") \
+    .config("spark.executor.instances", "1") \
     .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
     .config("spark.hadoop.fs.s3a.access.key", "admin") \
     .config("spark.hadoop.fs.s3a.secret.key", "admin123") \
