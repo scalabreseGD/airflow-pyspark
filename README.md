@@ -1,287 +1,292 @@
-# Spark + MinIO + Hive Integration Stack
+# Data Lake with Bronze/Silver/Gold Architecture
 
-A fully functional, production-ready Docker Compose setup for Apache Spark with Hive Metastore and MinIO (S3-compatible) storage.
+A production-ready data lake implementation using Apache Spark, Apache Airflow, Hive Metastore, and MinIO, following the Medallion Architecture (Bronze/Silver/Gold layers).
 
-## Features
+## Architecture Overview
 
-- **Apache Spark 3.5.3** with master and worker nodes
-- **Hive Metastore 3.1.3** with **Hadoop 3.3.4** for metadata management
-- **MinIO** as S3-compatible object storage
-- **PostgreSQL 14** as Hive Metastore backend
-- Full S3A protocol support for direct MinIO writes/reads
-- Complete Spark SQL integration with Hive tables
-- **Hive External Tables** - table metadata in Hive, data in MinIO
-- **SparkSQL** examples with temporary views and complex queries
-- Pre-configured with all necessary JAR dependencies (AWS SDK, Hadoop AWS, PostgreSQL JDBC)
-- Health checks and automatic service orchestration
-
-## Architecture
+This project implements a modern data lakehouse architecture with three layers:
 
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Data Lake Architecture                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Source Data (CSV) → Bronze (Raw) → Silver (Cleaned) → Gold     │
+│                                                           (Aggregated)
+│                                                                   │
+│  - CSV files         - Exact copy      - Validated    - Business │
+│  - Multiple systems  - All columns     - Cleaned      - Aggregated│
+│  - Raw format        - Partitioned     - Typed        - Ready for │
+│                      - Audit trail     - Transformed  - Analytics │
+└─────────────────────────────────────────────────────────────────┘
+
+Technology Stack:
 ┌─────────────────┐
-│  Spark Master   │ ←→ Spark Worker
-│   + Worker      │     (More workers can be added)
+│ Apache Airflow  │ ←→ Orchestrates ETL workflows
+│   + Scheduler   │
 └────────┬────────┘
+         │
+         ├─────────→ Apache Spark (ETL Processing)
+         │           • Master + Worker nodes
+         │           • PySpark for transformations
          │
          ├─────────→ MinIO (S3-compatible storage)
          │           • s3a://warehouse/ (Hive tables)
-         │           • s3a://data/ (Direct writes)
+         │           • s3a://data/ (Source data & staging)
          │
          └─────────→ Hive Metastore
                      └─→ PostgreSQL (Metadata DB)
 ```
 
+## Features
+
+- **Medallion Architecture**: Bronze (raw), Silver (cleaned), Gold (aggregated) layers
+- **Apache Airflow 2.7.0**: Workflow orchestration with DAGs
+- **Apache Spark 3.5.3**: Distributed data processing
+- **Hive Metastore 3.1.3**: Centralized table metadata management
+- **MinIO**: S3-compatible object storage for data lake
+- **PostgreSQL**: Backend for Hive Metastore and Airflow
+- **Jupyter Notebooks**: Interactive development and table creation
+- **Full S3A protocol support**: Direct reads/writes to MinIO
+- **Partitioned tables**: Optimized for performance and cost
+
 ## Quick Start
 
-### 1. Start the Stack
+### 1. Start All Services
 
 ```bash
 ./start.sh
 ```
 
 This will:
-- Build custom Spark images with all required dependencies
-- Start all services (MinIO, PostgreSQL, Hive, Spark)
-- Wait for services to become healthy
+- Build custom Docker images (Spark + Airflow)
+- Start all services with health checks
 - Display service URLs
 
-### 2. Run the Test Suite
+### 2. Set Up Airflow Connections
 
 ```bash
-./test.sh
+./setup_airflow_connections.sh
 ```
 
-This comprehensive test validates:
-- Direct S3A writes to MinIO
-- Direct S3A reads from MinIO
-- Hive database and table creation
-- Managed Hive tables with MinIO storage
-- External Hive tables with custom S3A locations
-- Spark SQL queries on Hive tables
-- DataFrame API with Hive integration
-- Multiple file formats (Parquet, CSV)
-- Partitioned tables
+This creates the `spark_default` connection in Airflow to submit jobs to the Spark cluster.
 
-### 3. Explore Example Spark Jobs
+### 3. Create Tables
 
-Try the included example jobs:
+Open Jupyter and run the notebooks in order:
+
+1. **Create Bronze Tables**: `notebooks/create_bronze_tables.ipynb`
+2. **Create Silver Tables**: `notebooks/create_silver_tables.ipynb`
+3. **Create Gold Tables**: `notebooks/create_gold_tables.ipynb`
+
+### 4. Run Bronze Data Ingestion
+
+#### Option A: Via Airflow (Recommended)
+
+1. Open Airflow UI: http://localhost:8082 (admin / admin)
+2. Enable the `ingest_bronze_data` DAG
+3. Trigger the DAG manually
+
+#### Option B: Direct Submission
 
 ```bash
-# Basic data processing - create sample data in MinIO
-./submit.sh create_sample_data.py
-
-# Filter and transform data with DataFrames
-./submit.sh filter_employees.py
-
-# SparkSQL with temporary views and complex queries
-./submit.sh sql_analysis.py
-
-# Hive External Tables - metadata in Hive, data in MinIO
-./submit.sh hive_external_tables.py
+./submit.sh ingest_bronze_data.py
 ```
 
-### 4. Submit Your Own Spark Jobs
+### 5. Verify Data
 
-```bash
-./submit.sh your_script.py
-```
-
-Place your Python scripts in the `spark-apps/` directory.
+- **MinIO Console**: http://localhost:9001 (admin / admin123)
+- **Spark Master UI**: http://localhost:8080
+- **Airflow UI**: http://localhost:8082 (admin / admin)
 
 ## Service URLs
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
+| Airflow UI | http://localhost:8082 | admin / admin |
 | Spark Master UI | http://localhost:8080 | - |
 | Spark Worker UI | http://localhost:8081 | - |
 | Spark Job UI | http://localhost:4040 | (When job is running) |
+| Jupyter Notebook | http://localhost:8888 | Token in logs |
 | MinIO Console | http://localhost:9001 | admin / admin123 |
 | MinIO API | http://localhost:9000 | admin / admin123 |
 | Hive Metastore | thrift://localhost:9083 | - |
 | PostgreSQL | localhost:5432 | hive / hive123 |
 
-## Writing Spark Applications
+## Data Layer Structure
 
-### Basic Template
+### Bronze Layer (Raw Data)
+
+**Database**: `bronze`
+
+The bronze layer stores raw data exactly as received from source systems with audit columns:
+
+- `_source_system`: Origin of the data
+- `_ingestion_timestamp`: When the data was ingested
+- `_file_name`: Source file name
+- `_record_offset`: Position in source file
+
+**Tables**:
+- `transactions_raw`
+- `transaction_items_raw`
+- `subscriptions_raw`
+- `customer_interactions_raw`
+- `product_catalog_raw`
+- `inventory_snapshots_raw`
+- `marketing_campaigns_raw`
+- `campaign_events_raw`
+
+**Location**: `s3a://warehouse/bronze.db/`
+
+### Silver Layer (Cleaned & Validated)
+
+**Database**: `silver`
+
+The silver layer contains cleaned, validated, and typed data ready for analytics:
+
+- Data types properly cast
+- Invalid records filtered or corrected
+- Duplicates removed
+- Business rules applied
+- Still detailed, not aggregated
+
+**Tables**:
+- `transactions`
+- `transaction_items`
+- `subscriptions`
+- `customer_interactions`
+- `product_catalog`
+- `inventory_snapshots`
+- `marketing_campaigns`
+- `campaign_events`
+
+**Location**: `s3a://warehouse/silver.db/`
+
+### Gold Layer (Business-Level Aggregates)
+
+**Database**: `gold`
+
+The gold layer contains business-level aggregates optimized for reporting and analytics:
+
+- Pre-aggregated metrics
+- Denormalized for query performance
+- Business KPIs and metrics
+- Ready for BI tools
+
+**Tables**:
+- `customer_summary`
+- `product_performance`
+- `sales_metrics`
+- `marketing_effectiveness`
+
+**Location**: `s3a://warehouse/gold.db/`
+
+## Project Structure
+
+```
+.
+├── docker-compose.yml              # Services orchestration
+├── docker/
+│   ├── spark/Dockerfile            # Spark with S3A JARs
+│   ├── hive/Dockerfile             # Hive Metastore with Hadoop 3.3.4
+│   └── jupyter/Dockerfile          # Jupyter with PySpark
+├── conf/
+│   ├── hive/                       # Hive Metastore configuration
+│   └── spark/                      # Spark configuration
+├── dags/
+│   └── ingest_bronze_data_dag.py   # Airflow DAG for bronze ingestion
+├── spark-apps/
+│   ├── ingest_bronze_data.py       # Bronze layer ingestion job
+│   └── reset_bronze_tables.py      # Helper to reset bronze tables
+├── notebooks/
+│   ├── create_bronze_tables.ipynb  # Create bronze layer tables
+│   ├── create_silver_tables.ipynb  # Create silver layer tables
+│   ├── create_gold_tables.ipynb    # Create gold layer tables
+│   └── spark_cluster_demo.ipynb    # Demo notebook
+├── source_data/                    # Source CSV files
+├── start.sh                        # Startup script
+├── submit.sh                       # Job submission script
+└── setup_airflow_connections.sh    # Airflow setup script
+```
+
+## Development Workflow
+
+### 1. Interactive Development (Jupyter)
+
+Access Jupyter for interactive development:
+
+```bash
+# Get Jupyter token from logs
+docker-compose logs jupyter | grep token
+
+# Open in browser: http://localhost:8888
+```
+
+Use notebooks to:
+- Create and modify table schemas
+- Test data transformations
+- Explore data interactively
+- Debug issues
+
+### 2. Production Jobs (Spark)
+
+Write production Spark jobs in `spark-apps/`:
 
 ```python
 from pyspark.sql import SparkSession
 
-# Create Spark session with Hive and MinIO support
 spark = SparkSession.builder \
-    .appName("MyApp") \
+    .appName("MyETLJob") \
     .enableHiveSupport() \
     .getOrCreate()
 
-# Your code here...
+try:
+    # Use Hive tables
+    spark.sql("USE bronze")
+    df = spark.table("transactions_raw")
 
-spark.stop()
+    # Transform data
+    transformed = df.filter(df.status == "completed")
+
+    # Write to silver layer
+    transformed.write \
+        .mode("overwrite") \
+        .insertInto("silver.transactions")
+
+finally:
+    spark.stop()
 ```
 
-### Direct MinIO Write/Read
+Submit jobs:
 
-```python
-# Write to MinIO using S3A protocol
-df.write.mode("overwrite").parquet("s3a://data/my-dataset/")
-
-# Read from MinIO
-df = spark.read.parquet("s3a://data/my-dataset/")
+```bash
+./submit.sh my_etl_job.py
 ```
 
-### Hive Tables
+### 3. Orchestration (Airflow)
+
+Create DAGs in `dags/` to orchestrate workflows:
 
 ```python
-# Create database
-spark.sql("CREATE DATABASE IF NOT EXISTS my_db")
-spark.sql("USE my_db")
+from airflow import DAG
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from datetime import datetime
 
-# Create managed table (stored in s3a://warehouse/)
-df.write.mode("overwrite").saveAsTable("my_table")
+with DAG(
+    'silver_layer_etl',
+    start_date=datetime(2024, 1, 1),
+    schedule_interval='@daily',
+) as dag:
 
-# Query with Spark SQL
-result = spark.sql("SELECT * FROM my_table WHERE age > 30")
-result.show()
-
-# Create external table with custom location
-spark.sql(f"""
-    CREATE EXTERNAL TABLE my_external_table (
-        id INT,
-        name STRING,
-        value DOUBLE
+    process_silver = SparkSubmitOperator(
+        task_id='process_silver',
+        application='/opt/spark-apps/process_silver.py',
+        conn_id='spark_default',
+        conf={
+            'spark.sql.hive.metastore.uris': 'thrift://hive-metastore:9083',
+            # ... other Spark configs
+        },
     )
-    STORED AS PARQUET
-    LOCATION 's3a://data/my-external-data/'
-""")
-```
-
-### Partitioned Tables
-
-```python
-# Write partitioned table
-df.write.mode("overwrite") \
-    .partitionBy("department", "year") \
-    .saveAsTable("employees_partitioned")
-
-# Query specific partition
-spark.sql("""
-    SELECT * FROM employees_partitioned
-    WHERE department = 'Engineering' AND year = 2024
-""").show()
-```
-
-### Using SparkSQL with Temporary Views
-
-```python
-# Read data from MinIO
-employees = spark.read.parquet("s3a://data/employees/")
-
-# Create temporary SQL view
-employees.createOrReplaceTempView("employees")
-
-# Run SQL queries with CASE statements, aggregations, etc.
-result = spark.sql("""
-    SELECT
-        name,
-        salary,
-        CASE
-            WHEN salary >= 100000 THEN 'Senior'
-            WHEN salary >= 90000 THEN 'Mid-Level'
-            ELSE 'Junior'
-        END as performance_tier
-    FROM employees
-    WHERE department = 'Engineering'
-    ORDER BY salary DESC
-""")
-
-# Aggregations with GROUP BY
-dept_stats = spark.sql("""
-    SELECT
-        department,
-        COUNT(*) as employee_count,
-        ROUND(AVG(salary), 2) as avg_salary,
-        MIN(salary) as min_salary,
-        MAX(salary) as max_salary
-    FROM employees
-    GROUP BY department
-    ORDER BY avg_salary DESC
-""")
-```
-
-See `spark-apps/sql_analysis.py` for a complete example.
-
-### Hive External Tables - Best of Both Worlds
-
-External tables provide persistent table definitions in Hive Metastore while keeping data in MinIO. This allows you to:
-- Query tables by name instead of full S3A paths
-- Keep data in MinIO (survives even if you DROP TABLE)
-- Share table definitions across multiple Spark jobs
-- Use catalog features (SHOW TABLES, DESCRIBE, etc.)
-
-```python
-# Create database
-spark.sql("CREATE DATABASE IF NOT EXISTS analytics")
-spark.sql("USE analytics")
-
-# Create external table pointing to existing data in MinIO
-spark.sql("""
-    CREATE EXTERNAL TABLE IF NOT EXISTS employees (
-        id INT,
-        name STRING,
-        age INT,
-        department STRING,
-        salary INT
-    )
-    STORED AS PARQUET
-    LOCATION 's3a://data/employees/'
-""")
-
-# Now query by table name (no need for full S3A paths!)
-spark.sql("SELECT * FROM employees WHERE salary >= 85000").show()
-
-# Tables persist across sessions
-spark.sql("SHOW TABLES").show()
-spark.sql("DESCRIBE EXTENDED employees").show()
-```
-
-**Important Notes:**
-- External tables store metadata in Hive, data stays in MinIO at the specified LOCATION
-- The `warehouse/analytics.db/` directory will be empty (expected behavior)
-- Data is stored at the LOCATION path (`s3a://data/employees/`)
-- Dropping external tables only removes metadata, not data
-
-See `spark-apps/hive_external_tables.py` for a comprehensive example.
-
-## Configuration
-
-### MinIO Buckets
-
-Two buckets are automatically created:
-- `warehouse` - Default location for Hive managed tables
-- `data` - For general data storage and external tables
-
-### S3A Configuration
-
-All S3A settings are pre-configured in:
-- `conf/spark/hive-site.xml` - Spark/Hive S3 configuration
-- `conf/spark/spark-defaults.conf` - Spark defaults
-- `conf/hive/metastore-site.xml` - Hive Metastore S3 configuration
-- `conf/hive/core-site.xml` - Hadoop core S3 configuration
-
-### Key Settings
-
-```properties
-# MinIO endpoint (internal Docker network)
-fs.s3a.endpoint = http://minio:9000
-
-# Credentials
-fs.s3a.access.key = admin
-fs.s3a.secret.key = admin123
-
-# Path style access (required for MinIO)
-fs.s3a.path.style.access = true
-
-# Disable SSL (for local development)
-fs.s3a.connection.ssl.enabled = false
 ```
 
 ## Managing the Stack
@@ -292,16 +297,16 @@ fs.s3a.connection.ssl.enabled = false
 ./start.sh
 ```
 
-### Clean Start (Remove all data)
-
-```bash
-./start.sh --clean
-```
-
 ### Stop Services
 
 ```bash
 docker-compose down
+```
+
+### Clean Start (Remove all data)
+
+```bash
+./start.sh --clean
 ```
 
 ### View Logs
@@ -312,8 +317,8 @@ docker-compose logs -f
 
 # Specific service
 docker-compose logs -f spark-master
+docker-compose logs -f airflow-scheduler
 docker-compose logs -f hive-metastore
-docker-compose logs -f minio
 ```
 
 ### Check Service Status
@@ -322,201 +327,133 @@ docker-compose logs -f minio
 docker-compose ps
 ```
 
-### Access MinIO Console
-
-1. Open http://localhost:9001
-2. Login with `admin` / `admin123`
-3. Browse buckets and objects
-
-### Access Spark Shell
+### Access Jupyter Token
 
 ```bash
-docker exec -it spark-master /opt/spark/bin/spark-shell \
-    --conf spark.sql.warehouse.dir=s3a://warehouse/ \
-    --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000
+docker-compose logs jupyter | grep token
 ```
 
-### Access PySpark Shell
+## Writing Spark Jobs
 
-```bash
-docker exec -it spark-master /opt/spark/bin/pyspark \
-    --conf spark.sql.warehouse.dir=s3a://warehouse/ \
-    --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000
+### Basic Template
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("MyApp") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+try:
+    # Your ETL logic here
+    spark.sql("USE bronze")
+    df = spark.table("transactions_raw")
+
+    # Process data
+    result = df.filter(df.status == "active")
+
+    # Write to silver
+    result.write.mode("overwrite").insertInto("silver.transactions")
+
+finally:
+    spark.stop()
+```
+
+### Reading from Bronze
+
+```python
+# Option 1: Using table names (recommended)
+spark.sql("USE bronze")
+df = spark.table("transactions_raw")
+
+# Option 2: Using SQL
+df = spark.sql("SELECT * FROM bronze.transactions_raw WHERE _ingestion_timestamp > '2024-01-01'")
+```
+
+### Writing to Silver/Gold
+
+```python
+# Clean and transform
+cleaned_df = bronze_df.dropDuplicates() \
+    .filter(col("amount") > 0) \
+    .withColumn("amount", col("amount").cast("double"))
+
+# Write to silver
+cleaned_df.write \
+    .mode("overwrite") \
+    .insertInto("silver.transactions")
 ```
 
 ## Troubleshooting
 
 ### Services Not Starting
 
-Check logs for specific service:
+Check logs:
 ```bash
-docker-compose logs hive-metastore
-docker-compose logs spark-master
+docker-compose logs <service-name>
 ```
-
-### Connection Issues
 
 Verify all services are healthy:
 ```bash
 docker-compose ps
 ```
 
-All services should show "healthy" or "Up" status.
+### Airflow DAG Not Appearing
 
-### S3A Connection Errors
+- Check scheduler logs: `docker-compose logs airflow-scheduler`
+- Verify DAG syntax: `docker-compose exec airflow-scheduler airflow dags list`
 
-1. Verify MinIO is running: http://localhost:9001
-2. Check MinIO credentials in configuration files
-3. Ensure buckets exist (created automatically by minio-setup)
+### Spark Job Failing
 
-### Hive Metastore Issues
+- Check Spark Master UI: http://localhost:8080
+- View job logs: `docker-compose logs spark-master`
+- Check Hive Metastore connection: `docker-compose logs hive-metastore`
 
-1. Check PostgreSQL is running and healthy
-2. Verify Hive Metastore logs:
-   ```bash
-   docker-compose logs hive-metastore
-   ```
-3. Check metastore connection:
-   ```bash
-   docker exec hive-metastore-db psql -U hive -d metastore -c "SELECT * FROM VERSION;"
-   ```
+### Cannot Find Tables
 
-### Performance Tuning
-
-Edit `conf/spark/spark-defaults.conf` to adjust:
-- `spark.executor.memory`
-- `spark.executor.cores`
-- `spark.hadoop.fs.s3a.connection.maximum`
-- `spark.hadoop.fs.s3a.threads.max`
-
-## Project Structure
-
-```
-.
-├── docker-compose.yml              # Main orchestration file
-├── docker/
-│   ├── spark/
-│   │   └── Dockerfile              # Custom Spark image with S3A JARs
-│   └── hive/
-│       └── Dockerfile              # Custom Hive Metastore with Hadoop 3.3.4
-├── conf/
-│   ├── hive/
-│   │   ├── metastore-site.xml     # Hive Metastore configuration
-│   │   └── core-site.xml          # Hadoop core S3A configuration
-│   └── spark/
-│       ├── hive-site.xml          # Spark Hive configuration
-│       └── spark-defaults.conf    # Spark default settings
-├── spark-apps/
-│   ├── create_sample_data.py      # Create sample datasets
-│   ├── filter_employees.py        # DataFrame filtering example
-│   ├── sql_analysis.py            # SparkSQL with temporary views
-│   ├── hive_external_tables.py    # Hive external tables demo
-│   └── complete_test.py           # Comprehensive test suite
-├── start.sh                       # Startup script
-├── submit.sh                      # Job submission script
-└── test.sh                        # Test runner script
-```
-
-## Dependencies Included
-
-### Custom Spark Image
-- `hadoop-aws-3.3.4.jar` - S3A filesystem support
-- `aws-java-sdk-bundle-1.12.367.jar` - AWS SDK for S3 operations
-- `postgresql-42.7.3.jar` - PostgreSQL JDBC driver
-
-### Custom Hive Metastore Image
-- **Hadoop 3.3.4** - Full Hadoop installation (upgraded from bundled 3.1.x)
-- `hadoop-aws-3.3.4.jar` - S3A filesystem support for Hive
-- `aws-java-sdk-bundle-1.12.367.jar` - AWS SDK for MinIO access
-- `postgresql-42.7.3.jar` - PostgreSQL JDBC driver with SCRAM-SHA-256 support
-
-All dependencies are automatically downloaded during image build. The Hive Metastore uses a custom Dockerfile that replaces the bundled Hadoop 3.1.x with Hadoop 3.3.4 for compatibility with modern AWS libraries.
-
-## Advanced Usage
-
-### Adding More Workers
-
-Edit `docker-compose.yml` and add additional worker services:
-
-```yaml
-spark-worker-2:
-  build:
-    context: ./docker/spark
-    dockerfile: Dockerfile
-  container_name: spark-worker-2
-  command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-  # ... rest of configuration
-```
-
-### Custom Spark Configuration
-
-Edit `conf/spark/spark-defaults.conf` to add custom settings.
-
-### External Access
-
-To allow external applications to connect:
-1. Update service names to use `localhost` instead of internal names
-2. Adjust port mappings in `docker-compose.yml`
-3. Update configuration files with external endpoints
-
-## Frequently Asked Questions
-
-### Why is `warehouse/analytics.db/` empty in MinIO?
-
-This is **expected behavior** for external tables. When you create an external table with a `LOCATION` clause:
-- Table **metadata** is stored in Hive Metastore
-- Table **data** is stored at the specified `LOCATION` (e.g., `s3a://data/employees/`)
-- The `warehouse/analytics.db/` directory is just a placeholder for the database
-
-To see data in the `warehouse` bucket, create a **managed table** instead:
-```python
-df.write.mode("overwrite").saveAsTable("my_managed_table")
-```
-
-### What's the difference between External and Managed tables?
-
-**External Tables:**
-- Metadata in Hive, data at custom LOCATION
-- `DROP TABLE` only removes metadata, not data
-- Data survives table deletion
-- Use for shared data or data you don't want Hive to manage
-
-**Managed Tables:**
-- Both metadata and data managed by Hive
-- Data stored in `s3a://warehouse/database.db/table_name/`
-- `DROP TABLE` removes both metadata and data
-- Use for temporary or Hive-exclusive data
-
-### How do I verify my Hive tables?
-
+Verify tables exist:
 ```bash
-# Connect to Spark and check tables
 docker exec -it spark-master /opt/spark/bin/pyspark
 
 # In PySpark:
 spark.sql("SHOW DATABASES").show()
-spark.sql("USE analytics")
+spark.sql("USE bronze")
 spark.sql("SHOW TABLES").show()
-spark.sql("DESCRIBE EXTENDED employees").show()
 ```
 
-### How do I check data in MinIO?
+### MinIO Connection Issues
 
-```bash
-# List data bucket contents
-docker exec minio-setup mc ls myminio/data/ --recursive
+- Verify MinIO is running: http://localhost:9001
+- Check credentials in configuration files
+- Ensure buckets exist (created automatically)
 
-# List warehouse bucket contents
-docker exec minio-setup mc ls myminio/warehouse/ --recursive
-```
+## Next Steps
 
-Or use the MinIO Console at http://localhost:9001 (admin/admin123)
+1. **Implement Silver Layer ETL**: Create Spark jobs to transform bronze to silver
+2. **Implement Gold Layer ETL**: Create aggregation jobs for gold layer
+3. **Schedule DAGs**: Set up daily/hourly schedules for ETL pipelines
+4. **Add Data Quality Checks**: Implement validation rules between layers
+5. **Set Up Monitoring**: Configure alerts for failed jobs
+6. **Connect BI Tools**: Integrate with Tableau, PowerBI, etc. to query gold tables
+
+## Best Practices
+
+- **Bronze Layer**: Keep raw data immutable, never modify
+- **Silver Layer**: Apply business rules, clean data, maintain detail
+- **Gold Layer**: Pre-aggregate for performance, denormalize as needed
+- **Partitioning**: Use date-based partitions for large tables
+- **Idempotency**: Ensure jobs can be re-run safely
+- **Testing**: Test transformations in Jupyter before deploying
+- **Monitoring**: Monitor Airflow and Spark UIs regularly
 
 ## Support and Documentation
 
 - [Apache Spark Documentation](https://spark.apache.org/docs/latest/)
+- [Apache Airflow Documentation](https://airflow.apache.org/docs/)
 - [Hive Documentation](https://hive.apache.org/)
 - [MinIO Documentation](https://min.io/docs/minio/linux/index.html)
+- [Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture)
 
 ## License
 

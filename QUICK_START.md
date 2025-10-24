@@ -1,287 +1,503 @@
-# Quick Start Guide
+# Quick Start Guide - Bronze/Silver/Gold Data Lake
 
-## What I've Built For You
+Get up and running with the Bronze/Silver/Gold data lakehouse in 5 minutes.
 
-A complete, working docker-compose stack with:
+## What Is This?
 
-1. **Spark 3.5.3** with custom-built images including all S3A/Hive JARs
-2. **Hive Metastore 4.0.0** with PostgreSQL backend
-3. **MinIO** for S3-compatible storage
-4. **Complete configuration** - all XML and conf files properly set up
-5. **Comprehensive test suite** - validates the entire stack
+A complete, production-ready data lakehouse implementing the **Medallion Architecture**:
 
-## Start the Stack
+- **Bronze Layer**: Raw data exactly as received from source systems
+- **Silver Layer**: Cleaned, validated, and typed data
+- **Gold Layer**: Business-level aggregates ready for analytics
+
+## Technology Stack
+
+- **Apache Spark 3.5.3**: Data processing and transformations
+- **Apache Airflow 2.7.0**: Workflow orchestration
+- **Hive Metastore 3.1.3**: Table metadata management
+- **MinIO**: S3-compatible object storage
+- **Jupyter**: Interactive development
+- **PostgreSQL**: Backend for metadata
+
+## Getting Started
+
+### Step 1: Start All Services
 
 ```bash
 ./start.sh
 ```
 
-This will:
-- Build Spark images with all dependencies (first time only)
-- Start all services with health checks
-- Show you when everything is ready
-- Display all service URLs
+**What happens:**
+- Builds Docker images (first time takes ~5 minutes)
+- Starts Spark, Airflow, Hive, MinIO, Jupyter, PostgreSQL
+- Waits for all services to be healthy
+- Displays service URLs
 
-## Run the Complete Test
+**Service URLs:**
+- Airflow: http://localhost:8082 (admin / admin)
+- Jupyter: http://localhost:8888 (token in logs)
+- Spark Master: http://localhost:8080
+- MinIO Console: http://localhost:9001 (admin / admin123)
 
-```bash
-./test.sh
-```
-
-This comprehensive test will validate:
-- Direct writes to MinIO via S3A protocol
-- Direct reads from MinIO
-- Hive database and table creation
-- Managed tables (stored in local warehouse)
-- Spark SQL queries
-- DataFrame API with Hive
-- Multiple formats (Parquet, CSV)
-- Partitioned tables
-
-## Try the Example ETL Job
-
-After running the test, try the example ETL job workflow:
-
-### Step 1: Create Sample Data
+### Step 2: Configure Airflow
 
 ```bash
-./submit.sh create_sample_data.py
+./setup_airflow_connections.sh
 ```
 
-This creates employee data in MinIO at `s3a://data/employees/`
+**What happens:**
+- Creates `spark_default` connection in Airflow
+- Configures Spark Master endpoint
+- Enables Airflow to submit Spark jobs
 
-### Step 2: Run the ETL Job
+### Step 3: Create Table Schemas
+
+Open Jupyter Notebook to create the bronze/silver/gold table schemas:
 
 ```bash
-./submit.sh filter_employees.py
+# Get Jupyter token
+docker-compose logs jupyter | grep token
+
+# Open: http://localhost:8888
 ```
 
-This example job demonstrates:
-1. Reading from MinIO via S3A (`s3a://data/employees/`)
-2. Filtering data (Engineering dept, salary >= $85k)
-3. Adding a computed column (`performance_tier`)
-4. Writing results back to MinIO (`s3a://data/high_performers/`)
-5. Generating summary statistics
+**Run these notebooks in order:**
 
-**What it does:**
-- Reads employee data from MinIO
-- Filters high-performing Engineering employees
-- Writes enriched data back to MinIO
-- Shows how multiple jobs can work with the same data in MinIO
+1. **`notebooks/create_bronze_tables.ipynb`**
+   - Creates `bronze` database
+   - Creates 8 raw data tables with audit columns
+   - Tables: transactions_raw, transaction_items_raw, subscriptions_raw, etc.
 
-**View Results:**
-- Open MinIO Console: http://localhost:9001 (admin/admin123)
-- Navigate to the `data` bucket
-- You'll see `employees/` and `high_performers/` directories with Parquet files
+2. **`notebooks/create_silver_tables.ipynb`**
+   - Creates `silver` database
+   - Creates cleaned and typed versions of bronze tables
+   - Removes audit columns, adds business logic
 
-## What Changed From Your Old Setup
+3. **`notebooks/create_gold_tables.ipynb`**
+   - Creates `gold` database
+   - Creates aggregated business metrics tables
+   - Tables: customer_summary, product_performance, sales_metrics, etc.
 
-### Problems Fixed
+### Step 4: Ingest Bronze Data
 
-1. **Missing JARs**: Added hadoop-aws, aws-java-sdk-bundle, postgresql jars
-2. **Configuration**: Proper S3A settings in all config files
-3. **Health checks**: Services wait for dependencies
-4. **Hive version**: Updated from 3.1.3 to 4.0.0 for better compatibility
+Now that tables exist, ingest the CSV data into bronze tables.
 
-### New Structure
+#### Option A: Via Airflow UI (Recommended)
 
-```
-airflow-pyspark/
-├── docker-compose.yml          # Clean orchestration
-├── docker/spark/Dockerfile     # Custom Spark with all JARs
-├── conf/
-│   ├── hive/                   # Hive Metastore config
-│   └── spark/                  # Spark config
-├── spark-apps/
-│   └── complete_test.py        # Full integration test
-├── start.sh                    # Easy startup
-├── submit.sh                   # Submit jobs
-└── test.sh                     # Run tests
-```
+1. Open Airflow: http://localhost:8082 (admin / admin)
+2. Find the `ingest_bronze_data` DAG
+3. Toggle it ON (unpause)
+4. Click "Trigger DAG" (play button)
+5. Monitor progress in the Airflow UI
 
-## Service URLs
-
-- **Spark Master UI**: http://localhost:8080
-- **MinIO Console**: http://localhost:9001 (admin/admin123)
-- **Spark Job UI**: http://localhost:4040 (when running)
-
-## Writing Your Own Spark Jobs
-
-### Quick Start: Submit a Job
-
-1. **Create your Python script** in the `spark-apps/` directory
-2. **Submit the job** using the submit script:
+#### Option B: Direct Spark Submit
 
 ```bash
-./submit.sh your_script.py
+./submit.sh ingest_bronze_data.py
 ```
 
-### Example Jobs Provided
+**What happens:**
+- Reads CSV files from `s3a://data/source_data/`
+- Validates and transforms data
+- Writes to bronze tables in Parquet format
+- Partitions by ingestion timestamp
 
-- **`complete_test.py`**: Comprehensive integration test
-- **`create_sample_data.py`**: Creates sample employee data in MinIO
-- **`filter_employees.py`**: Example ETL job (reads from MinIO, filters, writes back to MinIO)
+### Step 5: Verify Everything Works
 
-### Job Template
+#### Check Airflow
 
-Here's a basic template for your Spark jobs (using direct MinIO access via S3A):
+```bash
+# Open Airflow UI
+http://localhost:8082
+
+# View the DAG run
+# All tasks should be green (success)
+```
+
+#### Check MinIO
+
+```bash
+# Open MinIO Console
+http://localhost:9001 (admin / admin123)
+
+# Browse to: warehouse/bronze.db/
+# You should see folders for each table with Parquet files
+```
+
+#### Query Data in Jupyter
+
+Open a Jupyter notebook and run:
 
 ```python
 from pyspark.sql import SparkSession
 
-# Create Spark session
 spark = SparkSession.builder \
-    .appName("MyApp") \
+    .appName("VerifyData") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# Check bronze data
+spark.sql("USE bronze")
+spark.sql("SHOW TABLES").show()
+
+# Query a table
+df = spark.table("transactions_raw")
+print(f"Total records: {df.count()}")
+df.show(5)
+
+# Check row counts
+spark.sql("""
+    SELECT
+        'transactions_raw' as table_name,
+        COUNT(*) as row_count
+    FROM bronze.transactions_raw
+""").show()
+```
+
+## What's Next?
+
+You now have raw data in the bronze layer. Next steps:
+
+### 1. Implement Silver Layer Transformations
+
+Create a new Spark job: `spark-apps/process_silver.py`
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, to_date, trim
+
+spark = SparkSession.builder \
+    .appName("ProcessSilverLayer") \
+    .enableHiveSupport() \
     .getOrCreate()
 
 try:
-    # Read from MinIO via S3A
-    df = spark.read.parquet("s3a://data/input/")
+    # Read from bronze
+    spark.sql("USE bronze")
+    bronze_df = spark.table("transactions_raw")
 
-    # Transform your data
-    filtered = df.filter(df.age > 30)
+    # Clean and transform
+    silver_df = bronze_df \
+        .dropDuplicates() \
+        .filter(col("transaction_amount") > 0) \
+        .withColumn("transaction_amount", col("transaction_amount").cast("double")) \
+        .withColumn("transaction_date", to_date(col("transaction_date"), "yyyy-MM-dd")) \
+        .withColumn("customer_name", trim(col("customer_name"))) \
+        .drop("_source_system", "_ingestion_timestamp", "_file_name", "_record_offset")
 
-    # Write back to MinIO
-    filtered.write.mode("overwrite").parquet("s3a://data/output/")
+    # Write to silver
+    silver_df.write \
+        .mode("overwrite") \
+        .insertInto("silver.transactions")
 
-    # Verify
-    result = spark.read.parquet("s3a://data/output/")
-    print(f"Records written: {result.count()}")
-    result.show()
+    print(f"Processed {silver_df.count()} records to silver layer")
 
 finally:
     spark.stop()
 ```
 
-**Note**: This template uses direct S3A paths (recommended approach). All data is stored in MinIO and can be viewed in the MinIO Console.
-
-### Common Patterns
-
-#### Pattern 1: ETL Pipeline (Read → Transform → Write)
-
-```python
-# Read from MinIO
-source_df = spark.read.parquet("s3a://data/raw_data/")
-
-# Transform
-transformed = source_df \
-    .filter(source_df.status == "active") \
-    .select("id", "name", "value")
-
-# Write to MinIO
-transformed.write.mode("overwrite").parquet("s3a://data/processed_data/")
+Submit it:
+```bash
+./submit.sh process_silver.py
 ```
 
-#### Pattern 2: Data Aggregation
+### 2. Implement Gold Layer Aggregations
+
+Create: `spark-apps/process_gold.py`
 
 ```python
-# Read and aggregate
-df = spark.read.parquet("s3a://data/sales/")
-summary = df.groupBy("department") \
-    .agg({"amount": "sum", "quantity": "avg"})
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import sum, count, avg, max, min
 
-# Save results
-summary.write.mode("overwrite").parquet("s3a://data/sales_summary/")
+spark = SparkSession.builder \
+    .appName("ProcessGoldLayer") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+try:
+    spark.sql("USE silver")
+
+    # Create customer summary
+    customer_summary = spark.sql("""
+        SELECT
+            t.customer_id,
+            COUNT(DISTINCT t.transaction_id) as total_transactions,
+            SUM(t.transaction_amount) as total_spent,
+            AVG(t.transaction_amount) as avg_transaction,
+            MAX(t.transaction_date) as last_transaction_date,
+            COUNT(DISTINCT s.subscription_id) as active_subscriptions
+        FROM transactions t
+        LEFT JOIN subscriptions s ON t.customer_id = s.customer_id
+        WHERE s.subscription_status = 'active'
+        GROUP BY t.customer_id
+    """)
+
+    # Write to gold
+    customer_summary.write \
+        .mode("overwrite") \
+        .insertInto("gold.customer_summary")
+
+    print(f"Created {customer_summary.count()} customer summaries")
+
+finally:
+    spark.stop()
 ```
 
-#### Pattern 3: Multiple Source Joins
+### 3. Create Airflow DAGs for Silver and Gold
+
+Create: `dags/full_etl_pipeline.py`
 
 ```python
-# Read from multiple sources
-employees = spark.read.parquet("s3a://data/employees/")
-departments = spark.read.parquet("s3a://data/departments/")
+from airflow import DAG
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from datetime import datetime
 
-# Join and write result
-result = employees.join(departments, "dept_id") \
-    .select("emp_name", "dept_name", "salary")
+with DAG(
+    'full_etl_pipeline',
+    start_date=datetime(2024, 1, 1),
+    schedule_interval='@daily',
+    catchup=False,
+    tags=['etl', 'pipeline'],
+) as dag:
 
-result.write.mode("overwrite").parquet("s3a://data/employee_dept_view/")
+    bronze_ingestion = SparkSubmitOperator(
+        task_id='ingest_bronze',
+        application='/opt/spark-apps/ingest_bronze_data.py',
+        conn_id='spark_default',
+    )
+
+    silver_processing = SparkSubmitOperator(
+        task_id='process_silver',
+        application='/opt/spark-apps/process_silver.py',
+        conn_id='spark_default',
+    )
+
+    gold_aggregation = SparkSubmitOperator(
+        task_id='process_gold',
+        application='/opt/spark-apps/process_gold.py',
+        conn_id='spark_default',
+    )
+
+    # Define pipeline: bronze -> silver -> gold
+    bronze_ingestion >> silver_processing >> gold_aggregation
 ```
 
-#### Pattern 4: Using Spark SQL
+### 4. Schedule Your Pipeline
+
+Edit the DAG to run daily:
 
 ```python
-# Read data from MinIO
-employees = spark.read.parquet("s3a://data/employees/")
-departments = spark.read.parquet("s3a://data/departments/")
-
-# Create temporary SQL views
-employees.createOrReplaceTempView("employees")
-departments.createOrReplaceTempView("departments")
-
-# Run SQL query
-result = spark.sql("""
-    SELECT
-        e.name,
-        e.salary,
-        d.dept_name,
-        CASE
-            WHEN e.salary >= 100000 THEN 'Senior'
-            WHEN e.salary >= 90000 THEN 'Mid-Level'
-            ELSE 'Junior'
-        END as performance_tier
-    FROM employees e
-    JOIN departments d ON e.dept_id = d.id
-    WHERE e.department = 'Engineering'
-        AND e.salary >= 85000
-    ORDER BY e.salary DESC
-""")
-
-# Write results to MinIO
-result.write.mode("overwrite").parquet("s3a://data/sql_query_results/")
-
-# You can also run aggregation queries
-summary = spark.sql("""
-    SELECT
-        department,
-        COUNT(*) as employee_count,
-        AVG(salary) as avg_salary,
-        MAX(salary) as max_salary
-    FROM employees
-    GROUP BY department
-    ORDER BY avg_salary DESC
-""")
-
-summary.show()
+schedule_interval='@daily',  # Runs at midnight daily
+# or
+schedule_interval='0 2 * * *',  # Runs at 2 AM daily
 ```
 
-### Important Notes
+## Common Commands
 
-1. **Use S3A paths** for all data access: `s3a://bucket/path/`
-2. **Data is stored in MinIO** - view it in the MinIO Console (http://localhost:9001)
-3. **Multiple jobs can work with the same data** - all data persists in MinIO
-4. **Use `spark.stop()`** in a `finally` block to ensure cleanup
-5. **Parquet format** is recommended for efficiency (columnar, compressed)
-6. **Hive Metastore is available** for advanced use cases, but direct S3A is simpler
-
-## Clean Restart
-
-To start fresh (removes all data):
+### Managing Services
 
 ```bash
+# Start all services
+./start.sh
+
+# Stop all services
+docker-compose down
+
+# Clean restart (removes all data)
 ./start.sh --clean
+
+# View logs
+docker-compose logs -f spark-master
+docker-compose logs -f airflow-scheduler
+
+# Check status
+docker-compose ps
+```
+
+### Submitting Spark Jobs
+
+```bash
+# Submit a job
+./submit.sh ingest_bronze_data.py
+
+# Submit with logs
+./submit.sh ingest_bronze_data.py 2>&1 | tee job.log
+```
+
+### Accessing Services
+
+```bash
+# Get Jupyter token
+docker-compose logs jupyter | grep token
+
+# Access PySpark shell
+docker exec -it spark-master /opt/spark/bin/pyspark
+
+# Access Airflow CLI
+docker-compose exec airflow-scheduler airflow dags list
+
+# Check Hive tables
+docker exec -it spark-master /opt/spark/bin/pyspark
+>>> spark.sql("SHOW DATABASES").show()
+>>> spark.sql("USE bronze")
+>>> spark.sql("SHOW TABLES").show()
+```
+
+### Querying Data
+
+```bash
+# List MinIO data
+docker exec minio-setup mc ls myminio/warehouse/ --recursive
+
+# Query in PySpark
+docker exec -it spark-master /opt/spark/bin/pyspark
+>>> df = spark.table("bronze.transactions_raw")
+>>> df.show()
+```
+
+## Project Structure
+
+```
+.
+├── dags/
+│   └── ingest_bronze_data_dag.py     # Bronze ingestion DAG
+├── spark-apps/
+│   ├── ingest_bronze_data.py         # Bronze ingestion job
+│   └── reset_bronze_tables.py        # Helper script
+├── notebooks/
+│   ├── create_bronze_tables.ipynb    # Create bronze schemas
+│   ├── create_silver_tables.ipynb    # Create silver schemas
+│   └── create_gold_tables.ipynb      # Create gold schemas
+├── source_data/                      # CSV source files
+├── start.sh                          # Start services
+├── submit.sh                         # Submit Spark jobs
+└── setup_airflow_connections.sh      # Configure Airflow
+```
+
+## Data Flow
+
+```
+Source CSV Files (source_data/)
+        ↓
+    [Airflow DAG]
+        ↓
+Bronze Layer (bronze.db/)
+    - Raw data with audit columns
+    - Partitioned by ingestion timestamp
+    - Immutable (never modify)
+        ↓
+    [Your ETL Job]
+        ↓
+Silver Layer (silver.db/)
+    - Cleaned and validated
+    - Proper data types
+    - Business rules applied
+    - Duplicates removed
+        ↓
+    [Your Aggregation Job]
+        ↓
+Gold Layer (gold.db/)
+    - Pre-aggregated metrics
+    - Denormalized for performance
+    - Ready for BI tools
+    - Optimized for queries
 ```
 
 ## Troubleshooting
 
-### Check logs
-```bash
-docker-compose logs -f [service_name]
-```
+### Services won't start
 
-### Check status
 ```bash
+# Check what's failing
 docker-compose ps
+
+# View logs
+docker-compose logs <service-name>
+
+# Common fixes
+docker-compose down
+docker system prune -f
+./start.sh --clean
 ```
 
-### All services should show "healthy" or "Up"
+### DAG not appearing in Airflow
 
-## Next Steps
+```bash
+# Check scheduler logs
+docker-compose logs airflow-scheduler
 
-1. Start the stack: `./start.sh`
-2. Run the test: `./test.sh`
-3. Check MinIO console to see your data
-4. Write your own scripts in `spark-apps/`
-5. Submit with `./submit.sh your_script.py`
+# Verify DAG syntax
+docker-compose exec airflow-scheduler airflow dags list
 
-The confusion is over. Everything works now.
+# Restart scheduler
+docker-compose restart airflow-scheduler
+```
+
+### Tables not found
+
+```bash
+# Verify tables exist
+docker exec -it spark-master /opt/spark/bin/pyspark
+
+# In PySpark:
+spark.sql("SHOW DATABASES").show()
+spark.sql("USE bronze")
+spark.sql("SHOW TABLES").show()
+
+# If empty, run the create_bronze_tables.ipynb notebook again
+```
+
+### Jupyter token not working
+
+```bash
+# Get a fresh token
+docker-compose logs jupyter | grep token
+
+# Or restart Jupyter
+docker-compose restart jupyter
+```
+
+## Key Concepts
+
+### Bronze Layer
+- **Purpose**: Store raw data exactly as received
+- **When to use**: Always ingest raw data first
+- **Never**: Modify or delete bronze data
+
+### Silver Layer
+- **Purpose**: Clean, validate, and standardize data
+- **When to use**: For analytics on detailed records
+- **Apply**: Data quality rules, type conversions, deduplication
+
+### Gold Layer
+- **Purpose**: Business-level aggregates and metrics
+- **When to use**: For dashboards, reports, and BI tools
+- **Contains**: KPIs, summaries, pre-joined datasets
+
+## Best Practices
+
+1. **Always start with Bronze**: Ingest raw data first, transform later
+2. **Make jobs idempotent**: Jobs should produce same results when re-run
+3. **Test in Jupyter first**: Validate transformations before deploying
+4. **Monitor Airflow**: Check DAG runs daily
+5. **Partition large tables**: Use date-based partitions for performance
+6. **Use Hive tables**: Manage metadata through Hive Metastore
+7. **Document transformations**: Add comments to Spark jobs
+
+## Getting Help
+
+- **Airflow UI**: http://localhost:8082 - View DAG runs and logs
+- **Spark UI**: http://localhost:8080 - Monitor Spark jobs
+- **MinIO Console**: http://localhost:9001 - Browse data files
+- **Logs**: `docker-compose logs -f <service>`
+
+## Ready to Go!
+
+You're all set! You now have:
+- A running data lakehouse
+- Bronze layer with ingested data
+- Empty silver and gold layers ready for your transformations
+- Airflow orchestrating workflows
+- Jupyter for development
+
+Start building your silver and gold transformations and create a complete ETL pipeline!
