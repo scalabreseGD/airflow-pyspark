@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 
 # Default arguments for the DAG
@@ -100,6 +99,7 @@ def complete_pipeline(**context):
     print("=" * 80)
     return True
 
+
 # Spark configuration for silver transformations
 spark_silver_conf = {
     # Hive Metastore Configuration
@@ -126,23 +126,11 @@ spark_silver_conf = {
     'spark.sql.adaptive.coalescePartitions.enabled': 'true',
 }
 
-
 # Task 1: Pipeline initialization
 start_pipeline_task = PythonOperator(
     task_id='start_pipeline',
     python_callable=start_pipeline,
     provide_context=True,
-    dag=dag,
-)
-
-# Task 2: Trigger bronze data ingestion DAG
-trigger_bronze_ingestion = TriggerDagRunOperator(
-    task_id='trigger_bronze_ingestion',
-    trigger_dag_id='ingest_bronze_data',
-    wait_for_completion=True,  # Wait for the sub-DAG to complete
-    poke_interval=30,  # Check status every 30 seconds
-    reset_dag_run=True,  # Allow re-running even if already ran for this date
-    execution_date='{{ execution_date }}',  # Pass execution date to sub-DAG
     dag=dag,
 )
 
@@ -226,7 +214,7 @@ complete_pipeline_task = PythonOperator(
 
 # Define task dependencies
 # Pipeline flow: start -> bronze ingestion -> validate bronze -> silver transformations (parallel) -> complete
-start_pipeline_task >> trigger_bronze_ingestion >> validate_bronze_data >> [
+start_pipeline_task >> validate_bronze_data >> [
     transform_transactions_to_silver,
     transform_transaction_items_to_silver,
     transform_subscriptions_to_silver,

@@ -15,7 +15,7 @@ services:
     networks:
       - spark-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -69,7 +69,7 @@ services:
     networks:
       - spark-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hive -d metastore"]
+      test: [ "CMD-SHELL", "pg_isready -U hive -d metastore" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -105,11 +105,11 @@ services:
     networks:
       - spark-network
     healthcheck:
-      test: ["CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/9083'"]
+      test: [ "CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/9083'" ]
       interval: 10s
       timeout: 5s
       retries: 10
-    entrypoint: ["/bin/bash"]
+    entrypoint: [ "/bin/bash" ]
     command: >
       -c "
       export HIVE_CONF_DIR=/opt/hive/conf;
@@ -161,7 +161,7 @@ services:
     build:
       context: ./docker/spark
       dockerfile: Dockerfile
-#    container_name: spark-worker
+    #    container_name: spark-worker
     hostname: spark-worker
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     depends_on:
@@ -178,8 +178,8 @@ services:
       - AWS_REGION=us-east-1
       - PYSPARK_PYTHON=/usr/bin/python3
       - PYSPARK_DRIVER_PYTHON=/usr/bin/python3
-#    ports:
-#      - "8081:8081"
+    #    ports:
+    #      - "8081:8081"
     volumes:
       - ./spark-apps:/opt/spark-apps
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml
@@ -264,19 +264,20 @@ services:
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key_12345
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
     ports:
       - "8082:8080"
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
       - ./volumes/airflow-logs:/opt/airflow/logs
-      - ./volumes/airflow-plugins:/opt/airflow/plugins
       - ./spark-apps:/opt/spark-apps:ro
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
     networks:
       - spark-network
     command: webserver
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -297,19 +298,39 @@ services:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
       - ./volumes/airflow-logs:/opt/airflow/logs
-      - ./volumes/airflow-plugins:/opt/airflow/plugins
       - ./spark-apps:/opt/spark-apps:ro
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
     networks:
       - spark-network
     command: scheduler
     healthcheck:
-      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname)"]
+      test: [ "CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname)" ]
       interval: 30s
       timeout: 10s
       retries: 5
     restart: always
+
+  # Memgraph - Graph database for storing DAG and task relationships
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: memgraph-mage
+    ports:
+      - "7687:7687"
+      - "7444:7444"
+    command: [ "--log-level=TRACE" ]
+
+  memgraph-lab:
+    image: memgraph/lab:latest
+    container_name: memgraph-lab
+    ports:
+      - "3000:3000"
+    depends_on:
+      - memgraph
+    environment:
+      - QUICK_CONNECT_MG_HOST=memgraph
+      - QUICK_CONNECT_MG_PORT=7687
 
 networks:
   spark-network:

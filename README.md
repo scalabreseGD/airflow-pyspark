@@ -49,6 +49,7 @@ Technology Stack:
 - **Jupyter Notebooks**: Interactive development and table creation
 - **Full S3A protocol support**: Direct reads/writes to MinIO
 - **Partitioned tables**: Optimized for performance and cost
+- **Knowledge Graph**: Automatic DAG visualization and lineage tracking with Memgraph
 
 ## Quick Start
 
@@ -112,6 +113,7 @@ Open Jupyter and run the notebooks in order:
 | MinIO API | http://localhost:9000 | admin / admin123 |
 | Hive Metastore | thrift://localhost:9083 | - |
 | PostgreSQL | localhost:5432 | hive / hive123 |
+| Memgraph Lab | http://localhost:3000 | - (if running) |
 
 ## Data Layer Structure
 
@@ -215,8 +217,72 @@ The gold layer contains business-level aggregates optimized for reporting and an
 ├── source_data/                    # Source CSV files
 ├── start.sh                        # Startup script
 ├── submit.sh                       # Job submission script
-└── setup_airflow_connections.sh    # Airflow setup script
+├── setup_airflow_connections.sh    # Airflow setup script
+├── create-kb/
+│   ├── parse-airflow.py            # DAG knowledge graph generator
+│   └── README.md                   # Knowledge graph documentation
+└── plugins/
+    └── dag_code.py                 # Custom Airflow plugin for DAG code extraction
 ```
+
+## DAG Knowledge Graph
+
+The project includes automated knowledge graph generation that extracts DAG metadata and loads it into Memgraph for visualization and analysis.
+
+### Features
+
+- **Automatic DAG Discovery**: Extracts all DAGs, tasks, and dependencies from Airflow
+- **AST Parsing**: Analyzes DAG Python files to understand task relationships
+- **Graph Database**: Stores pipeline metadata in Memgraph for querying and visualization
+- **Spark Job Tracking**: Identifies and tracks all Spark jobs in your pipeline
+- **Real-time Updates**: Refresh the graph anytime to reflect current pipeline state
+- **Custom Airflow Plugin**: Extends Airflow REST API to expose DAG source code
+
+### Quick Start
+
+**Note**: The custom Airflow plugin (`plugins/dag_code.py`) is automatically loaded when you start Airflow with this project.
+
+1. **Install Dependencies**:
+   ```bash
+   pip install neo4j requests
+   ```
+
+2. **Verify Plugin is Loaded**:
+   ```bash
+   curl http://localhost:8082/api/v1/dag_code/health
+   # Should return: {"status": "healthy", ...}
+   ```
+
+3. **Start Memgraph** (optional - for visualization):
+   ```bash
+   docker run -d --name memgraph -p 7687:7687 -p 3000:3000 memgraph/memgraph-platform
+   ```
+
+4. **Generate Knowledge Graph**:
+   ```bash
+   python create-kb/parse-airflow.py
+   ```
+
+5. **Visualize** (open Memgraph Lab):
+   ```
+   http://localhost:3000
+   ```
+
+   Example query:
+   ```cypher
+   MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:DEPENDS_ON]->(upstream)
+   RETURN d, t, upstream;
+   ```
+
+### What It Captures
+
+- DAG nodes with task counts and Spark job metrics
+- Task nodes with operator types, parameters, and Spark applications
+- Dependency relationships (>>, <<, set_upstream/downstream)
+- Trigger relationships (TriggerDagRunOperator)
+- Complete data lineage through bronze → silver → gold
+
+See [create-kb/README.md](create-kb/README.md) for detailed documentation, examples, and query recipes.
 
 ## Development Workflow
 
@@ -468,6 +534,7 @@ This will:
 4. **Connect BI Tools**: Integrate with Tableau, PowerBI, etc. to query gold tables
 5. **Optimize Performance**: Tune Spark configurations for your workload
 6. **Add Data Governance**: Implement data lineage and quality metrics
+7. **Explore Knowledge Graph**: Use `create-kb/parse-airflow.py` to visualize pipeline dependencies and track Spark jobs
 
 ## Best Practices
 
