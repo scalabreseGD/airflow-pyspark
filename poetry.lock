@@ -2447,7 +2447,7 @@ description = "IPython: Productive Interactive Computing"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version < \"3.13\""
+markers = "python_version < \"3.14\""
 files = [
     {file = "ipython-8.37.0-py3-none-any.whl", hash = "sha256:ed87326596b878932dbcb171e3e698845434d8c61b8d8cd474bf663041a9dcf2"},
     {file = "ipython-8.37.0.tar.gz", hash = "sha256:ca815841e1a41a1e6b73a0b08f3038af9b2252564d01fc405356d34033012216"},
@@ -2487,7 +2487,7 @@ description = "IPython: Productive Interactive Computing"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version >= \"3.13\""
+markers = "python_version >= \"3.14\""
 files = [
     {file = "ipython-9.6.0-py3-none-any.whl", hash = "sha256:5f77efafc886d2f023442479b8149e7d86547ad0a979e9da9f045d252f648196"},
     {file = "ipython-9.6.0.tar.gz", hash = "sha256:5603d6d5d356378be5043e69441a072b50a5b33b4503428c77b04cb8ce7bc731"},
@@ -2520,7 +2520,7 @@ description = "Defines a variety of Pygments lexers for highlighting IPython cod
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version >= \"3.13\""
+markers = "python_version >= \"3.14\""
 files = [
     {file = "ipython_pygments_lexers-1.1.1-py3-none-any.whl", hash = "sha256:a9462224a505ade19a605f71f8fa63c2048833ce50abc86768a0d81d876dc81c"},
     {file = "ipython_pygments_lexers-1.1.1.tar.gz", hash = "sha256:09c0138009e56b6854f9535736f4171d855c8c08a563a0dcd8022f78355c7e81"},
@@ -3779,6 +3779,26 @@ traitlets = ">=5.1"
 [package.extras]
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinxcontrib-github-alt", "sphinxcontrib-spelling"]
 test = ["pep440", "pre-commit", "pytest", "testpath"]
+
+[[package]]
+name = "neo4j"
+version = "6.0.2"
+description = "Neo4j Bolt driver for Python"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "neo4j-6.0.2-py3-none-any.whl", hash = "sha256:dc3fc1c99f6da2293d9deefead1e31dd7429bbb513eccf96e4134b7dbf770243"},
+    {file = "neo4j-6.0.2.tar.gz", hash = "sha256:c98734c855b457e7a976424dc04446d652838d00907d250d6e9a595e88892378"},
+]
+
+[package.dependencies]
+pytz = "*"
+
+[package.extras]
+numpy = ["numpy (>=1.21.2,<3.0.0)"]
+pandas = ["numpy (>=1.21.2,<3.0.0)", "pandas (>=1.1.0,<3.0.0)"]
+pyarrow = ["pyarrow (>=6.0.0,<22.0.0)"]
 
 [[package]]
 name = "nest-asyncio"
@@ -6290,4 +6310,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<=3.14"
-content-hash = "40d3bd85afcbb9c7254819eab7a773453f2fbe0965b1efb462fb7581473a129d"
+content-hash = "c37a7010a70117680fbc932d4ac2fe7e6ac8d2400d5aca353dd5f19ab75e952b"
