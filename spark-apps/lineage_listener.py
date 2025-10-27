@@ -1,0 +1,222 @@
+from __future__ import annotations
+
+import os
+import re
+from typing import List, Set, Optional
+import atexit
+
+try:
+    from neo4j import GraphDatabase as _Neo4jDriver
+except Exception:
+    _Neo4jDriver = None
+from pyspark.sql import SparkSession, DataFrameReader, DataFrameWriter
+
+
+class MemgraphClient:
+    def __init__(self, uri: str, user: Optional[str], password: Optional[str]) -> None:
+        if _Neo4jDriver is None:
+            raise ImportError("neo4j driver not installed; disable LINEAGE_TO_MEMGRAPH or install neo4j package")
+        auth = (user, password) if (user and password) else None
+        self._driver = _Neo4jDriver.driver(uri, auth=auth)
+        _dbg(f"MemgraphClient initialized. URI={uri}, auth={'basic' if auth else 'none'}")
+        try:
+            with self._driver.session() as s:
+                s.run("RETURN 1").consume()
+            _dbg("Memgraph bolt connection OK")
+        except Exception as e:
+            _dbg(f"Memgraph connectivity test failed: {e}")
+
+    def close(self) -> None:
+        self._driver.close()
+
+    def upsert_lineage(self, job_name: str, sources: List[str], destinations: List[str]) -> None:
+        _dbg(f"Upsert lineage: job={job_name}, sources={len(sources)}, destinations={len(destinations)}")
+        cypher_nodes = (
+            "UNWIND $sources AS s MERGE (:Dataset {name: s}); "
+            "UNWIND $destinations AS d MERGE (:Dataset {name: d})"
+        )
+        cypher_edges_write = (
+            "MERGE (j:SparkJob {name: $job}) "
+            "WITH j "
+            "UNWIND $pairs AS p "
+            "MATCH (s:Dataset {name: p.source}), (d:Dataset {name: p.dest}) "
+            "MERGE (s)-[:FLOWS_TO]->(j)-[:WRITES_TO]->(d)"
+        )
+        cypher_edges_readonly = (
+            "MERGE (j:SparkJob {name: $job}) "
+            "WITH j "
+            "UNWIND $sources AS sname "
+            "MATCH (s:Dataset {name: sname}) "
+            "MERGE (s)-[:FLOWS_TO]->(j)"
+        )
+        try:
+            with self._driver.session() as session:
+                session.run(cypher_nodes, sources=list(set(sources or [])), destinations=list(set(destinations or [])))
+                if destinations:
+                    pairs = [{"source": s, "dest": d} for s in set(sources or []) for d in set(destinations or [])]
+                    if pairs:
+                        _dbg(f"Creating write edges for {len(pairs)} source-dest pairs")
+                        session.run(cypher_edges_write, pairs=pairs, job=job_name)
+                elif sources:
+                    _dbg(f"Creating read-only edges for {len(set(sources))} sources")
+                    session.run(cypher_edges_readonly, sources=list(set(sources)), job=job_name)
+        except Exception as e:
+            _dbg(f"ERROR writing lineage to Memgraph: {e}")
+
+
+class _LineageTracker:
+    def __init__(self, job_name: str, client: MemgraphClient | None) -> None:
+        self.job_name = job_name
+        self.client = client
+        self.sources: Set[str] = set()
+
+    def add_source(self, name: str) -> None:
+        if not name:
+            return
+        self.sources.add(name)
+        _dbg(f"Source added: {name}")
+
+    def emit(self, destinations: List[str]) -> None:
+        if not self.client:
+            _dbg("Skipping emit: no Memgraph client (init failed or disabled)")
+            return
+        try:
+            _dbg(f"Emitting lineage: sources={list(self.sources)}, destinations={destinations}")
+            self.client.upsert_lineage(self.job_name, list(self.sources), destinations)
+        finally:
+            # Reset sources after a write boundary
+            self.sources.clear()
+
+
+def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
+    enabled = os.getenv("LINEAGE_TO_MEMGRAPH", "true").lower() in ("1", "true", "yes")
+    if not enabled:
+        _dbg("Lineage disabled via LINEAGE_TO_MEMGRAPH env var")
+        return
+
+    uri = os.getenv("MEMGRAPH_URI", "bolt://memgraph:7687")
+    user = os.getenv("MEMGRAPH_USER", "")
+    password = os.getenv("MEMGRAPH_PASSWORD", "")
+
+    try:
+        client = MemgraphClient(uri, user, password)
+    except Exception as e:
+        _dbg(f"Memgraph client init failed: {e}")
+        client = None
+
+    app_name = spark.sparkContext.appName or "spark-job"
+    _dbg(f"Enabling lineage for app: {app_name}")
+    tracker = _LineageTracker(app_name, client)
+
+    # Attach tracker to session to avoid GC
+    setattr(spark, "_lineage_tracker", tracker)
+
+    # Patch SparkSession.table
+    orig_table = spark.table
+
+    def table_patched(name: str):
+        tracker.add_source(name)
+        return orig_table(name)
+
+    spark.table = table_patched  # type: ignore[assignment]
+
+    # Patch DataFrameReader methods
+    def wrap_reader_method(method_name: str):
+        orig = getattr(DataFrameReader, method_name)
+
+        def _wrapped(self, *args, **kwargs):  # type: ignore[no-redef]
+            path = None
+            if args:
+                path = args[0]
+            elif "path" in kwargs:
+                path = kwargs.get("path")
+            if path:
+                tracker.add_source(str(path))
+            return orig(self, *args, **kwargs)
+
+        setattr(DataFrameReader, method_name, _wrapped)
+
+    for m in ("csv", "parquet", "json", "orc", "text", "load"):
+        if hasattr(DataFrameReader, m):
+            wrap_reader_method(m)
+
+    # Patch DataFrameWriter methods
+    def wrap_writer_dest_table(method_name: str):
+        orig = getattr(DataFrameWriter, method_name)
+
+        def _wrapped(self, name: str, *args, **kwargs):  # type: ignore[no-redef]
+            dests = [str(name)] if name else []
+            tracker.emit(dests)
+            return orig(self, name, *args, **kwargs)
+
+        setattr(DataFrameWriter, method_name, _wrapped)
+
+    for m in ("saveAsTable", "insertInto"):
+        if hasattr(DataFrameWriter, m):
+            wrap_writer_dest_table(m)
+
+    # Patch DataFrameWriter.save (file path destinations)
+    if hasattr(DataFrameWriter, "save"):
+        orig_save = getattr(DataFrameWriter, "save")
+
+        def save_patched(self, path=None, *args, **kwargs):  # type: ignore[no-redef]
+            dests = [str(path)] if path else []
+            tracker.emit(dests)
+            return orig_save(self, path, *args, **kwargs)
+
+        setattr(DataFrameWriter, "save", save_patched)
+
+    # Patch spark.sql to handle INSERT ... SELECT lineage
+    orig_sql = spark.sql
+
+    def sql_patched(query: str, *args, **kwargs):
+        q = query or ""
+        lower = q.lower()
+        # Extract destination table for INSERT INTO/OVERWRITE TABLE dest ...
+        dests: List[str] = []
+        # Extract simple FROM and JOIN table references for any SQL
+        sources = set(re.findall(r"\bfrom\s+([\w\.]+)", lower))
+        sources.update(re.findall(r"\bjoin\s+([\w\.]+)", lower))
+        for s in sources:
+            tracker.add_source(s)
+        if lower.strip().startswith("insert"):
+            m = re.search(r"insert\s+(overwrite\s+table|into)\s+([\w\.]+)", lower)
+            if m:
+                dests = [m.group(2)]
+            if dests:
+                _dbg(f"SQL INSERT detected. dests={dests}, sources={list(sources)}")
+                tracker.emit(dests)
+        elif sources:
+            _dbg(f"SQL SELECT/other detected. sources={list(sources)}")
+        return orig_sql(query, *args, **kwargs)
+
+    spark.sql = sql_patched  # type: ignore[assignment]
+    _dbg("Lineage monkeypatches applied")
+
+    # Emit any collected sources on interpreter exit (read-only jobs)
+    def _flush_on_exit():
+        if getattr(spark, "_lineage_tracker", None) and spark._lineage_tracker.sources:
+            _dbg("Process exit flush: emitting read-only lineage")
+            try:
+                spark._lineage_tracker.emit([])
+            except Exception as e:
+                _dbg(f"Flush error: {e}")
+
+    atexit.register(_flush_on_exit)
+
+
+def enable_lineage(spark: SparkSession) -> None:
+    _enable_monkeypatch_lineage(spark)
+
+
+def register_lineage_listener(spark: SparkSession) -> None:
+    # Backward-compatible API name used in scripts
+    enable_lineage(spark)
+
+
+def _dbg(msg: str) -> None:
+    try:
+        if os.getenv("LINEAGE_DEBUG", "true").lower() in ("1", "true", "yes"):
+            print(f"[LINEAGE] {msg}")
+    except Exception:
+        pass

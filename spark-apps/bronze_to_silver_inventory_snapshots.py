@@ -39,6 +39,13 @@ app_name = known_args.app_name
 builder = SparkSession.builder.enableHiveSupport()
 spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
+# Register lineage listener to push sources/destinations to Memgraph
+try:
+    from lineage_listener import register_lineage_listener
+    register_lineage_listener(spark)
+except Exception as e:
+    raise e
+
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
 

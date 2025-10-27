@@ -24,6 +24,10 @@ RUN apt-get update && \
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.11 1 && \
     update-alternatives --set python3 /usr/local/bin/python3.11
 
+# Install Python packages needed by jobs
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir neo4j
+
 # Set PYSPARK_PYTHON to tell workers which Python to use
 ENV PYSPARK_PYTHON=/usr/bin/python3
 ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3

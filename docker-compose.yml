@@ -320,6 +320,8 @@ services:
       - "7687:7687"
       - "7444:7444"
     command: [ "--log-level=TRACE" ]
+    networks:
+      - spark-network
 
   memgraph-lab:
     image: memgraph/lab:latest
@@ -331,6 +333,8 @@ services:
     environment:
       - QUICK_CONNECT_MG_HOST=memgraph
       - QUICK_CONNECT_MG_PORT=7687
+    networks:
+      - spark-network
 
 networks:
   spark-network:

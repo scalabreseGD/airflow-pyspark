@@ -778,3 +778,26 @@ Gold Layer (Business Analytics)
 - [SparkSubmitOperator Docs](https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/)
 - [Spark Configuration](https://spark.apache.org/docs/latest/configuration.html)
 - [Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture)
+
+## Lineage to Memgraph (experimental)
+
+Spark apps can push simple lineage (sources -> job -> destinations) to Memgraph.
+
+- Configure via environment variables:
+  - `LINEAGE_TO_MEMGRAPH=true` (default true)
+  - `MEMGRAPH_URI` (default `bolt://memgraph:7687`)
+  - `MEMGRAPH_USER` (default `neo4j`)
+  - `MEMGRAPH_PASSWORD` (default `neo4j`)
+
+- Rebuild Spark image to include Python dependency:
+
+```bash
+docker-compose build spark-master spark-worker
+docker-compose up -d spark-master spark-worker memgraph memgraph-lab
+```
+
+- The listener is registered inside Spark apps after `SparkSession` creation. Nodes:
+  - `(:Dataset {name})`, `(:Job {name})`
+  - Relationships: `(Dataset)-[:FLOWS_TO]->(Job)-[:WRITES_TO]->(Dataset)`
+
+- View in Memgraph Lab at `http://localhost:3000`.
