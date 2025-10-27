@@ -15,13 +15,17 @@ The `parse-airflow.py` script connects to your Airflow instance via REST API, pa
 │                                                          │
 │  Airflow REST API                                        │
 │       ↓                                                  │
-│  Fetch DAG Metadata                                      │
+│  Fetch DAG Metadata & Source Code                        │
 │       ↓                                                  │
 │  Parse DAG Python Files (AST)                            │
 │       ↓                                                  │
-│  Extract Tasks & Dependencies                            │
+│  Extract Tasks, Dependencies & Spark Configurations      │
 │       ↓                                                  │
 │  Memgraph (Graph Database)                               │
+│    • DAG nodes                                           │
+│    • Task nodes                                          │
+│    • SparkJob nodes (with resource & dependency info)    │
+│    • CONTAINS, EXECUTES, DEPENDS_ON relationships        │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -32,7 +36,9 @@ The `parse-airflow.py` script connects to your Airflow instance via REST API, pa
 - **AST Parsing**: Analyzes Python DAG files to extract task definitions and dependencies
 - **Graph Database Storage**: Loads data directly into Memgraph (no intermediate JSON files)
 - **Relationship Tracking**: Captures task dependencies, DAG triggers, and Spark job mappings
-- **Spark Job Detection**: Identifies SparkSubmitOperator tasks and their applications
+- **Spark Job Detection**: Identifies SparkSubmitOperator tasks and extracts comprehensive job configuration
+- **Dependency Analysis**: Tracks Spark job dependencies (packages, jars, py_files) for environment analysis
+- **Resource Tracking**: Captures executor memory, cores, and other resource configurations for optimization
 
 ## Prerequisites
 
@@ -121,6 +127,18 @@ SPARK_OPERATOR_NAMES = {
     "DataprocSubmitJobOperator",
     "EmrAddStepsOperator",
 }
+
+# Spark job parameters to extract (focused on analysis)
+SPARK_JOB_PARAMS = {
+    # Core identification
+    "application", "name", "conn_id",
+    # Resource configuration
+    "executor_cores", "executor_memory", "driver_memory", "num_executors",
+    # Dependencies & libraries
+    "packages", "py_files", "jars", "files",
+    # Configuration & behavior
+    "application_args", "env_vars", "conf",
+}
 ```
 
 ## Usage
@@ -162,13 +180,17 @@ python create-kb/parse-airflow.py
 📊 Loading 22 tasks from 3 DAGs into Memgraph...
    ✅ Created 3 DAG nodes
    ✅ Created 22 Task nodes
+   ✅ Created 16 SparkJob nodes
    ✅ Created 19 dependency relationships
    ✅ Created 1 TRIGGERS relationships
    ✅ Created indexes
 
 🎉 Successfully loaded data into Memgraph!
    📍 Access Memgraph Lab at: http://localhost:3000
-   💡 Example query: MATCH (d:DAG)-[:CONTAINS]->(t:Task) RETURN d, t LIMIT 25
+   💡 Example queries:
+      - View DAGs and Tasks: MATCH (d:DAG)-[:CONTAINS]->(t:Task) RETURN d, t LIMIT 25
+      - View Spark Jobs: MATCH (t:Task)-[:EXECUTES]->(sj:SparkJob) RETURN t, sj LIMIT 25
+      - Full pipeline: MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:EXECUTES]->(sj:SparkJob) RETURN d, t, sj LIMIT 25
 ```
 
 ## Graph Schema
@@ -198,11 +220,42 @@ python create-kb/parse-airflow.py
 })
 ```
 
+**SparkJob Node** (New!)
+```cypher
+(:SparkJob {
+  job_id: string,           // Unique job identifier
+  // Core identification
+  application: string,      // Path to Spark application (e.g., /opt/spark-apps/my_job.py)
+  name: string,            // Job name
+  conn_id: string,         // Spark connection ID
+  // Resource configuration
+  executor_cores: int,     // Number of cores per executor
+  executor_memory: string, // Memory per executor (e.g., "2g")
+  driver_memory: string,   // Driver memory (e.g., "1g")
+  num_executors: int,      // Number of executors
+  // Dependencies & Libraries
+  packages: string,        // Maven packages (e.g., org.apache.spark:spark-sql-kafka)
+  py_files: string,        // Python dependencies (.zip, .egg, .py files)
+  jars: string,           // JAR file dependencies
+  files: string,          // Additional files (configs, lookup tables)
+  // Configuration & Behavior
+  application_args: json,  // Arguments passed to the Spark application
+  env_vars: json,         // Environment variables
+  conf: json,             // Spark configuration dictionary
+  updated_at: timestamp   // Last update time
+})
+```
+
 ### Relationships
 
 **CONTAINS**: Links DAG to its tasks
 ```cypher
 (DAG)-[:CONTAINS]->(Task)
+```
+
+**EXECUTES**: Links Task to SparkJob configuration
+```cypher
+(Task)-[:EXECUTES]->(SparkJob)
 ```
 
 **DEPENDS_ON**: Task dependency relationship
@@ -214,6 +267,30 @@ python create-kb/parse-airflow.py
 ```cypher
 (Task)-[:TRIGGERS]->(DAG)
 ```
+
+### Why SparkJob Nodes Matter
+
+The SparkJob nodes provide deep insights into your Spark applications:
+
+**Resource Management:**
+- Identify over/under-provisioned jobs by analyzing executor memory and core allocations
+- Compare resource usage across similar jobs to standardize configurations
+- Track total compute resources used across all pipelines
+
+**Dependency Management:**
+- Know which jobs use external packages (Kafka connectors, Delta Lake, etc.)
+- Track custom Python modules and JAR dependencies
+- Identify jobs that need specific configuration files
+
+**Environment Analysis:**
+- See which jobs use environment variables for configuration
+- Understand Spark configuration patterns across your organization
+- Identify jobs with special requirements (specific Spark versions, connectors)
+
+**Optimization Opportunities:**
+- Find duplicate or similar job configurations
+- Identify jobs that could share dependencies or resources
+- Track configuration drift between development and production
 
 ## Querying the Knowledge Graph
 
@@ -233,51 +310,98 @@ RETURN d, t
 LIMIT 50;
 ```
 
-**2. Find all Spark jobs:**
+**2. Find all Spark jobs with their configurations:**
 ```cypher
-MATCH (t:Task)
-WHERE t.is_spark_task = true
-RETURN t.dag_id, t.task_id, t.spark_job;
+MATCH (t:Task)-[:EXECUTES]->(sj:SparkJob)
+RETURN t.dag_id, t.task_id, sj.application, sj.executor_memory, sj.num_executors;
 ```
 
-**3. Find task dependencies for a specific DAG:**
+**3. Find Spark jobs using specific packages (e.g., Kafka):**
+```cypher
+MATCH (sj:SparkJob)
+WHERE sj.packages CONTAINS 'kafka'
+RETURN sj.application, sj.packages;
+```
+
+**4. Find resource-intensive Spark jobs:**
+```cypher
+MATCH (sj:SparkJob)
+WHERE sj.num_executors > 5 OR sj.executor_memory >= '4g'
+RETURN sj.application, sj.num_executors, sj.executor_memory, sj.driver_memory
+ORDER BY sj.num_executors DESC;
+```
+
+**5. Analyze job dependencies and libraries:**
+```cypher
+MATCH (sj:SparkJob)
+WHERE sj.packages IS NOT NULL OR sj.jars IS NOT NULL OR sj.py_files IS NOT NULL
+RETURN sj.application, sj.packages, sj.py_files, sj.jars;
+```
+
+**6. Find task dependencies for a specific DAG:**
 ```cypher
 MATCH (d:DAG {dag_id: 'bronze_to_silver_pipeline'})-[:CONTAINS]->(t:Task)
 OPTIONAL MATCH (t)-[:DEPENDS_ON]->(upstream:Task)
 RETURN t.task_id, collect(upstream.task_id) as upstream_tasks;
 ```
 
-**4. Find all tasks that trigger other DAGs:**
+**7. Trace complete pipeline with Spark jobs:**
+```cypher
+MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:EXECUTES]->(sj:SparkJob)
+OPTIONAL MATCH (t)-[:DEPENDS_ON]->(upstream:Task)
+RETURN d.dag_id, t.task_id, sj.application, upstream.task_id as upstream_task;
+```
+
+**8. Find all tasks that trigger other DAGs:**
 ```cypher
 MATCH (t:Task)-[:TRIGGERS]->(d:DAG)
 RETURN t.dag_id, t.task_id, d.dag_id as triggered_dag;
 ```
 
-**5. Find the complete dependency chain for a task:**
+**9. Find the complete dependency chain for a task:**
 ```cypher
 MATCH path = (t:Task {task_id: 'ingest_bronze_data'})-[:DEPENDS_ON*]->(upstream:Task)
 RETURN path;
 ```
 
-**6. Count tasks by operator type:**
+**10. Count tasks by operator type:**
 ```cypher
 MATCH (t:Task)
 RETURN t.operator_type, count(*) as count
 ORDER BY count DESC;
 ```
 
-**7. Find DAGs with the most Spark jobs:**
+**11. Find DAGs with the most Spark jobs:**
 ```cypher
 MATCH (d:DAG)
 RETURN d.dag_id, d.spark_tasks
 ORDER BY d.spark_tasks DESC;
 ```
 
-**8. Visualize the entire pipeline:**
+**12. Visualize the entire pipeline with Spark jobs:**
 ```cypher
 MATCH (d:DAG)-[:CONTAINS]->(t:Task)
+OPTIONAL MATCH (t)-[:EXECUTES]->(sj:SparkJob)
 OPTIONAL MATCH (t)-[r:DEPENDS_ON|TRIGGERS]->(related)
-RETURN d, t, r, related;
+RETURN d, t, sj, r, related;
+```
+
+**13. Find Spark jobs with environment variables:**
+```cypher
+MATCH (sj:SparkJob)
+WHERE sj.env_vars IS NOT NULL
+RETURN sj.application, sj.env_vars;
+```
+
+**14. Compare resource allocation across jobs:**
+```cypher
+MATCH (sj:SparkJob)
+WHERE sj.executor_memory IS NOT NULL
+RETURN sj.application,
+       sj.num_executors,
+       sj.executor_memory,
+       sj.driver_memory
+ORDER BY sj.num_executors DESC;
 ```
 
 ## Code Structure
@@ -304,8 +428,10 @@ The refactored code follows a clean object-oriented design:
 - `load_tasks()`: Load tasks into graph
 - `_create_dag_nodes()`: Create DAG nodes
 - `_create_task_nodes()`: Create task nodes
+- `_create_spark_job_nodes()`: Create SparkJob nodes with full configuration
 - `_create_dependencies()`: Create dependency relationships
 - `_create_triggers()`: Create trigger relationships
+- `_create_indexes()`: Create indexes for query performance
 
 ## Detected Task Patterns
 
@@ -417,13 +543,25 @@ Understand which downstream tasks are affected when you modify a specific task o
 Visualize complex task dependencies across multiple DAGs using Memgraph Lab's graph visualization.
 
 ### 4. Spark Job Inventory
-Maintain an inventory of all Spark jobs across your pipeline with their file paths and dependencies.
+Maintain a comprehensive inventory of all Spark jobs across your pipeline with their configurations, dependencies, and resource requirements.
 
-### 5. Pipeline Optimization
+### 5. Resource Optimization
+Analyze resource allocation across Spark jobs (executor memory, cores, number of executors) to identify over-provisioned or under-provisioned jobs.
+
+### 6. Dependency Management
+Track external dependencies (packages, jars, py_files) across all Spark jobs to understand library usage and identify version conflicts.
+
+### 7. Environment Analysis
+Identify Spark jobs that use environment variables or specific configurations, making it easier to replicate environments or debug configuration issues.
+
+### 8. Pipeline Optimization
 Identify bottlenecks and optimization opportunities by analyzing task dependencies and execution patterns.
 
-### 6. Data Lineage
+### 9. Data Lineage
 Track data flow through bronze → silver → gold layers by following task relationships.
+
+### 10. Library Usage Analysis
+Find all Spark jobs using specific libraries (e.g., Kafka, Delta Lake, Iceberg) to understand technology adoption across your pipeline.
 
 ## Integration with CI/CD
 
@@ -463,11 +601,14 @@ jobs:
 ## Future Enhancements
 
 - **Incremental Updates**: Only update changed DAGs instead of full refresh
-- **Version History**: Track changes to DAGs over time
-- **Performance Metrics**: Add task duration and success rate data
-- **Data Lineage**: Link to data assets (tables, files, etc.)
+- **Version History**: Track changes to DAGs and SparkJob configurations over time
+- **Performance Metrics**: Add task duration, success rate, and resource utilization data from Spark history server
+- **Data Lineage**: Link SparkJobs to data assets (tables, files, S3 buckets) they read/write
 - **Custom Metadata**: Support for custom task metadata annotations
 - **Export Functionality**: Export graph to other formats (GraphML, JSON, etc.)
+- **Cost Analysis**: Integrate with cloud provider APIs to calculate job costs based on resource usage
+- **Duplicate Detection**: Identify Spark jobs with similar configurations or dependencies
+- **Optimization Recommendations**: Suggest resource optimizations based on historical patterns
 
 ## Technical Details: Custom Airflow Plugin
 

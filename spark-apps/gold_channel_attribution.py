@@ -20,13 +20,14 @@ Usage:
     ./submit.sh gold_channel_attribution.py
 """
 
+import argparse
 from datetime import datetime
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, count, countDistinct, sum as spark_sum, avg, lit,
+    col, count, sum as spark_sum, avg, lit,
     current_timestamp, current_date, when, struct, array, map_from_arrays,
-    collect_list, size, expr, row_number, datediff, pow as spark_pow,
-    min as spark_min, max as spark_max, explode
+    collect_list, expr, row_number, datediff, min as spark_min, max as spark_max
 )
 from pyspark.sql.window import Window
 
@@ -34,10 +35,13 @@ print("=" * 80)
 print("  Gold Layer - Channel Attribution")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("GoldChannelAttribution") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting analysis at: {datetime.now()}")
@@ -189,14 +193,14 @@ try:
                              array(col("transaction_revenue").cast("DECIMAL(12,2)"))
                          ))
                     .otherwise(
-                         # Multiple touchpoints: 30% first, 70% last
-                         map_from_arrays(
-                             array(col("first_touch_channel"), col("last_touch_channel")),
-                             array(
-                                 (col("transaction_revenue") * lit(0.3)).cast("DECIMAL(12,2)"),
-                                 (col("transaction_revenue") * lit(0.7)).cast("DECIMAL(12,2)")
-                             )
-                         )
+                        # Multiple touchpoints: 30% first, 70% last
+                        map_from_arrays(
+                            array(col("first_touch_channel"), col("last_touch_channel")),
+                            array(
+                                (col("transaction_revenue") * lit(0.3)).cast("DECIMAL(12,2)"),
+                                (col("transaction_revenue") * lit(0.7)).cast("DECIMAL(12,2)")
+                            )
+                        )
                     ))
 
     # Position Based Attribution: 40% first, 40% last, 20% middle
@@ -209,13 +213,13 @@ try:
                              array(col("transaction_revenue").cast("DECIMAL(12,2)"))
                          ))
                     .when((col("touchpoint_count") == 2) | (col("first_touch_channel") == col("last_touch_channel")),
-                         # Two touchpoints or same channel: 50/50 split (but avoid duplicate keys)
-                         when(col("first_touch_channel") == col("last_touch_channel"),
-                              map_from_arrays(
-                                  array(col("first_touch_channel")),
-                                  array(col("transaction_revenue").cast("DECIMAL(12,2)"))
-                              ))
-                         .otherwise(
+                          # Two touchpoints or same channel: 50/50 split (but avoid duplicate keys)
+                          when(col("first_touch_channel") == col("last_touch_channel"),
+                               map_from_arrays(
+                                   array(col("first_touch_channel")),
+                                   array(col("transaction_revenue").cast("DECIMAL(12,2)"))
+                               ))
+                          .otherwise(
                               map_from_arrays(
                                   array(col("first_touch_channel"), col("last_touch_channel")),
                                   array(
@@ -223,16 +227,16 @@ try:
                                       (col("transaction_revenue") * lit(0.5)).cast("DECIMAL(12,2)")
                                   )
                               )
-                         ))
+                          ))
                     .otherwise(
-                         # Multiple touchpoints: 40% first, 40% last, 20% middle (simplified)
-                         map_from_arrays(
-                             array(col("first_touch_channel"), col("last_touch_channel")),
-                             array(
-                                 (col("transaction_revenue") * lit(0.4)).cast("DECIMAL(12,2)"),
-                                 (col("transaction_revenue") * lit(0.4)).cast("DECIMAL(12,2)")
-                             )
-                         )
+                        # Multiple touchpoints: 40% first, 40% last, 20% middle (simplified)
+                        map_from_arrays(
+                            array(col("first_touch_channel"), col("last_touch_channel")),
+                            array(
+                                (col("transaction_revenue") * lit(0.4)).cast("DECIMAL(12,2)"),
+                                (col("transaction_revenue") * lit(0.4)).cast("DECIMAL(12,2)")
+                            )
+                        )
                     ))
 
     # Data-Driven Attribution (simplified ML-based approach)
@@ -249,14 +253,14 @@ try:
                              array(col("transaction_revenue").cast("DECIMAL(12,2)"))
                          ))
                     .otherwise(
-                         # Multiple distinct touchpoints: 45% first, 55% last
-                         map_from_arrays(
-                             array(col("first_touch_channel"), col("last_touch_channel")),
-                             array(
-                                 (col("transaction_revenue") * lit(0.45)).cast("DECIMAL(12,2)"),
-                                 (col("transaction_revenue") * lit(0.55)).cast("DECIMAL(12,2)")
-                             )
-                         )
+                        # Multiple distinct touchpoints: 45% first, 55% last
+                        map_from_arrays(
+                            array(col("first_touch_channel"), col("last_touch_channel")),
+                            array(
+                                (col("transaction_revenue") * lit(0.45)).cast("DECIMAL(12,2)"),
+                                (col("transaction_revenue") * lit(0.55)).cast("DECIMAL(12,2)")
+                            )
+                        )
                     ))
 
     # Add metadata
@@ -332,12 +336,14 @@ try:
     print("  SUCCESS! Channel attribution analysis complete")
     print("=" * 80)
     print("\nQuery examples:")
-    print("  spark.sql('SELECT first_touch_channel, COUNT(*) FROM gold.channel_attribution GROUP BY first_touch_channel').show()")
+    print(
+        "  spark.sql('SELECT first_touch_channel, COUNT(*) FROM gold.channel_attribution GROUP BY first_touch_channel').show()")
     print("  spark.sql('SELECT * FROM gold.channel_attribution WHERE journey_length_days > 7 LIMIT 10').show()")
 
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

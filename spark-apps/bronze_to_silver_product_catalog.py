@@ -23,11 +23,13 @@ Usage:
     ./submit.sh bronze_to_silver_product_catalog.py
 """
 
+import argparse
 from datetime import datetime
-from pyspark.sql import SparkSession, DataFrame
+
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, to_date, when, current_timestamp, lit, expr,
-    coalesce, datediff, concat_ws, from_json, array
+    coalesce, datediff, concat_ws, from_json
 )
 from pyspark.sql.types import ArrayType, StringType
 
@@ -35,10 +37,13 @@ print("=" * 80)
 print("  Bronze to Silver - Product Catalog Transformation")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("BronzeToSilverProductCatalog") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
@@ -63,10 +68,10 @@ try:
     # Build full category path
     silver_df = silver_df \
         .withColumn("full_category_path",
-                   concat_ws(" > ",
-                            coalesce(col("category_level1"), lit("")),
-                            coalesce(col("category_level2"), lit("")),
-                            coalesce(col("category_level3"), lit(""))))
+                    concat_ws(" > ",
+                              coalesce(col("category_level1"), lit("")),
+                              coalesce(col("category_level2"), lit("")),
+                              coalesce(col("category_level3"), lit(""))))
 
     print("  ✓ Built category hierarchy path")
 
@@ -82,20 +87,20 @@ try:
     # Calculate margin percentage: ((list_price - unit_cost) / list_price) * 100
     silver_df = silver_df \
         .withColumn("margin_percentage",
-                   when(col("list_price") > 0,
-                        ((col("list_price") - col("unit_cost")) / col("list_price") * 100))
-                   .otherwise(lit(0.0))
-                   .cast("DECIMAL(5,2)"))
+                    when(col("list_price") > 0,
+                         ((col("list_price") - col("unit_cost")) / col("list_price") * 100))
+                    .otherwise(lit(0.0))
+                    .cast("DECIMAL(5,2)"))
 
     print("  ✓ Calculated margin percentage")
 
     # Determine price tier based on list_price
     silver_df = silver_df \
         .withColumn("price_tier",
-                   when(col("list_price") < 50, "budget")
-                   .when((col("list_price") >= 50) & (col("list_price") < 200), "mid-range")
-                   .when((col("list_price") >= 200) & (col("list_price") < 500), "premium")
-                   .otherwise("luxury"))
+                    when(col("list_price") < 50, "budget")
+                    .when((col("list_price") >= 50) & (col("list_price") < 200), "mid-range")
+                    .when((col("list_price") >= 200) & (col("list_price") < 500), "premium")
+                    .otherwise("luxury"))
 
     print("  ✓ Determined price tiers")
 
@@ -103,9 +108,9 @@ try:
     silver_df = silver_df \
         .withColumn("launch_date", to_date(col("launch_date"), "yyyy-MM-dd")) \
         .withColumn("discontinuation_date",
-                   when(col("discontinuation_date").isNotNull() & (col("discontinuation_date") != ""),
-                        to_date(col("discontinuation_date"), "yyyy-MM-dd"))
-                   .otherwise(lit(None)))
+                    when(col("discontinuation_date").isNotNull() & (col("discontinuation_date") != ""),
+                         to_date(col("discontinuation_date"), "yyyy-MM-dd"))
+                    .otherwise(lit(None)))
 
     print("  ✓ Date casting complete")
 
@@ -114,29 +119,29 @@ try:
     # Calculate product_age_days
     silver_df = silver_df \
         .withColumn("product_age_days",
-                   coalesce(
-                       datediff(current_timestamp().cast("date"), col("launch_date")),
-                       lit(0)
-                   ))
+                    coalesce(
+                        datediff(current_timestamp().cast("date"), col("launch_date")),
+                        lit(0)
+                    ))
 
     print("  ✓ Calculated product age")
 
     # Determine is_active (not discontinued)
     silver_df = silver_df \
         .withColumn("is_active",
-                   when(col("discontinuation_date").isNull(), True)
-                   .otherwise(False))
+                    when(col("discontinuation_date").isNull(), True)
+                    .otherwise(False))
 
     print("  ✓ Determined active status")
 
     # Determine lifecycle_stage based on product_age_days and is_active
     silver_df = silver_df \
         .withColumn("lifecycle_stage",
-                   when(~col("is_active"), "discontinued")
-                   .when(col("product_age_days") < 90, "introduction")  # < 3 months
-                   .when(col("product_age_days") < 365, "growth")       # < 1 year
-                   .when(col("product_age_days") < 1095, "maturity")    # < 3 years
-                   .otherwise("decline"))
+                    when(~col("is_active"), "discontinued")
+                    .when(col("product_age_days") < 90, "introduction")  # < 3 months
+                    .when(col("product_age_days") < 365, "growth")  # < 1 year
+                    .when(col("product_age_days") < 1095, "maturity")  # < 3 years
+                    .otherwise("decline"))
 
     print("  ✓ Determined lifecycle stage")
 
@@ -146,9 +151,9 @@ try:
     # Assuming tags is stored as JSON array string like '["tag1", "tag2"]' or empty/null
     silver_df = silver_df \
         .withColumn("tags",
-                   when((col("tags").isNotNull()) & (col("tags") != "") & (col("tags") != "[]"),
-                        from_json(col("tags"), ArrayType(StringType())))
-                   .otherwise(lit(None).cast(ArrayType(StringType()))))
+                    when((col("tags").isNotNull()) & (col("tags") != "") & (col("tags") != "[]"),
+                         from_json(col("tags"), ArrayType(StringType())))
+                    .otherwise(lit(None).cast(ArrayType(StringType()))))
 
     print("  ✓ Parsed tags array")
 
@@ -290,11 +295,13 @@ try:
     print("=" * 80)
     print("\nQuery examples:")
     print("  spark.sql('SELECT * FROM silver.product_catalog WHERE is_active = true LIMIT 10').show()")
-    print("  spark.sql('SELECT * FROM silver.product_catalog WHERE lifecycle_stage = \"introduction\" LIMIT 10').show()")
+    print(
+        "  spark.sql('SELECT * FROM silver.product_catalog WHERE lifecycle_stage = \"introduction\" LIMIT 10').show()")
 
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

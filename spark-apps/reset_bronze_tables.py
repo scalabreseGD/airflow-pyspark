@@ -11,18 +11,24 @@ Usage:
     ./submit.sh reset_bronze_tables.py
 """
 
-from pyspark.sql import SparkSession
+import argparse
 from datetime import datetime
-import sys
+
+from pyspark.sql import SparkSession
 
 print("=" * 80)
 print("  Reset Bronze Tables")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("ResetBronzeTables") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+if app_name is None:
+    app_name = 'ResetBronzeTables'
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 # Bronze tables to drop
 bronze_tables = [
@@ -125,6 +131,7 @@ try:
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

@@ -141,6 +141,7 @@ validate_bronze_data = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='ValidateBronzeData',
     dag=dag,
 )
 
@@ -151,6 +152,7 @@ transform_transactions_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverTransactions',
     dag=dag,
 )
 
@@ -161,6 +163,7 @@ transform_transaction_items_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverTransactionItems',
     dag=dag,
 )
 
@@ -171,6 +174,7 @@ transform_subscriptions_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverSubscriptions',
     dag=dag,
 )
 
@@ -181,6 +185,7 @@ transform_product_catalog_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverProductCatalog',
     dag=dag,
 )
 
@@ -191,6 +196,7 @@ transform_inventory_snapshots_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverInventorySnapshots',
     dag=dag,
 )
 
@@ -201,6 +207,7 @@ transform_customer_interactions_to_silver = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_silver_conf,
     verbose=True,
+    name='BronzeToSilverCustomerInteractions',
     dag=dag,
 )
 

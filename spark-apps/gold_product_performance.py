@@ -7,11 +7,12 @@ Input: silver.transaction_items, silver.product_catalog, silver.inventory_snapsh
 Output: gold.product_performance (Parquet, partitioned by analysis_date, time_period)
 """
 
-from datetime import datetime
+import argparse
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, count, sum as spark_sum, avg, countDistinct, current_timestamp,
-    current_date, desc, rank, when, lit, dense_rank, row_number
+    current_date, desc, when, lit, dense_rank, row_number
 )
 from pyspark.sql.window import Window
 
@@ -19,7 +20,13 @@ print("=" * 80)
 print("  Gold Layer - Product Performance")
 print("=" * 80)
 
-spark = SparkSession.builder.appName("GoldProductPerformance").enableHiveSupport().getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     # Read data
@@ -39,7 +46,8 @@ try:
 
     # Calculate product metrics
     print("\n[2/2] Calculating product metrics...")
-    product_metrics = items_with_products.groupBy("product_id", "product_name", "category_level1", "category_level2", "brand").agg(
+    product_metrics = items_with_products.groupBy("product_id", "product_name", "category_level1", "category_level2",
+                                                  "brand").agg(
         spark_sum("net_quantity").alias("total_units_sold"),
         count("transaction_item_id").alias("total_transactions"),
         countDistinct("customer_id").alias("total_customers"),
@@ -55,7 +63,8 @@ try:
     product_metrics = product_metrics \
         .withColumn("repeat_customers", col("total_customers") - col("new_customers")) \
         .withColumn("net_revenue", col("gross_revenue").cast("DECIMAL(15,2)")) \
-        .withColumn("return_rate", (col("units_returned") / (col("total_units_sold") + col("units_returned"))).cast("DECIMAL(5,2)")) \
+        .withColumn("return_rate",
+                    (col("units_returned") / (col("total_units_sold") + col("units_returned"))).cast("DECIMAL(5,2)")) \
         .withColumn("gross_margin_percentage", (col("gross_profit") / col("gross_revenue") * 100).cast("DECIMAL(5,2)"))
 
     # Rank products
@@ -122,7 +131,8 @@ try:
 
     # Write to gold
     print("\nWriting to gold.product_performance...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date", "time_period").format("parquet").saveAsTable("gold.product_performance")
+    final_df.write.mode("overwrite").partitionBy("analysis_date", "time_period").format("parquet").saveAsTable(
+        "gold.product_performance")
 
     print(f"\n✓ Successfully created product performance for {final_df.count():,} products")
     print("\n" + "=" * 80)
@@ -132,6 +142,7 @@ try:
 except Exception as e:
     print(f"\n❌ ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 finally:

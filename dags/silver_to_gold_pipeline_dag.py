@@ -148,6 +148,7 @@ transform_product_performance = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldProductPerformance',
     dag=dag,
 )
 
@@ -158,6 +159,7 @@ transform_customer_360 = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldCustomer360',
     dag=dag,
 )
 
@@ -168,6 +170,7 @@ transform_store_performance = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldStorePerformance',
     dag=dag,
 )
 
@@ -178,6 +181,7 @@ transform_subscription_health = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldSubscriptionHealth',
     dag=dag,
 )
 
@@ -188,6 +192,7 @@ transform_basket_analysis = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldBasketAnalysis',
     dag=dag,
 )
 
@@ -198,6 +203,7 @@ transform_campaign_roi_analysis = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldCampaignROI',
     dag=dag,
 )
 
@@ -208,6 +214,7 @@ transform_category_brand_performance = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldCategoryBrandPerformance',
     dag=dag,
 )
 
@@ -218,6 +225,7 @@ transform_channel_attribution = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldChannelAttribution',
     dag=dag,
 )
 
@@ -228,6 +236,7 @@ transform_cohort_analysis = SparkSubmitOperator(
     conn_id='spark_default',
     conf=spark_gold_conf,
     verbose=True,
+    name='GoldCohortAnalysis',
     dag=dag,
 )
 

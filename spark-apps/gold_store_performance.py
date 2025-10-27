@@ -7,10 +7,12 @@ Input: silver.transactions
 Output: gold.store_performance (Parquet, partitioned by analysis_date)
 """
 
+import argparse
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, count, sum as spark_sum, avg, countDistinct, current_timestamp,
-    current_date, when, desc, lit, dense_rank
+    current_date, desc, lit, dense_rank
 )
 from pyspark.sql.window import Window
 
@@ -18,7 +20,13 @@ print("=" * 80)
 print("  Gold Layer - Store Performance")
 print("=" * 80)
 
-spark = SparkSession.builder.appName("GoldStorePerformance").enableHiveSupport().getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     # Read transactions
@@ -72,7 +80,8 @@ try:
 
     # Write to gold
     print("\nWriting to gold.store_performance...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable("gold.store_performance")
+    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable(
+        "gold.store_performance")
 
     print(f"\n✓ Successfully created store performance for {final_df.count():,} stores")
     print("\n" + "=" * 80)
@@ -82,6 +91,7 @@ try:
 except Exception as e:
     print(f"\n❌ ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 finally:

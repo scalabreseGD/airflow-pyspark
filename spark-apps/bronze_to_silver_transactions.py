@@ -19,12 +19,14 @@ Usage:
     ./submit.sh bronze_to_silver_transactions.py
 """
 
+import argparse
 from datetime import datetime
-from pyspark.sql import SparkSession, DataFrame
+
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, to_timestamp, to_date, from_json, when,
+    col, to_timestamp, to_date, when,
     year, month, quarter, dayofweek, hour,
-    current_timestamp, lit, expr, from_json, coalesce
+    current_timestamp, lit, expr, from_json
 )
 from pyspark.sql.types import ArrayType, StringType
 
@@ -32,10 +34,13 @@ print("=" * 80)
 print("  Bronze to Silver - Transactions Transformation")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("BronzeToSilverTransactions") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
@@ -72,9 +77,9 @@ try:
     # Assuming coupon_codes is stored as JSON array string like '["CODE1", "CODE2"]'
     silver_df = silver_df \
         .withColumn("coupon_codes",
-                   when(col("coupon_codes").isNotNull() & (col("coupon_codes") != ""),
-                        from_json(col("coupon_codes"), ArrayType(StringType())))
-                   .otherwise(lit(None).cast(ArrayType(StringType()))))
+                    when(col("coupon_codes").isNotNull() & (col("coupon_codes") != ""),
+                         from_json(col("coupon_codes"), ArrayType(StringType())))
+                    .otherwise(lit(None).cast(ArrayType(StringType()))))
 
     print("  ✓ Parsed JSON coupon_codes array")
 
@@ -93,14 +98,14 @@ try:
     # Fiscal year: April to March (adjust as needed for your business)
     silver_df = silver_df \
         .withColumn("fiscal_year",
-                   when(month(col("transaction_timestamp")) >= 4,
-                        year(col("transaction_timestamp")))
-                   .otherwise(year(col("transaction_timestamp")) - 1)) \
+                    when(month(col("transaction_timestamp")) >= 4,
+                         year(col("transaction_timestamp")))
+                    .otherwise(year(col("transaction_timestamp")) - 1)) \
         .withColumn("fiscal_quarter",
-                   when(month(col("transaction_timestamp")).isin([4, 5, 6]), 1)
-                   .when(month(col("transaction_timestamp")).isin([7, 8, 9]), 2)
-                   .when(month(col("transaction_timestamp")).isin([10, 11, 12]), 3)
-                   .otherwise(4))
+                    when(month(col("transaction_timestamp")).isin([4, 5, 6]), 1)
+                    .when(month(col("transaction_timestamp")).isin([7, 8, 9]), 2)
+                    .when(month(col("transaction_timestamp")).isin([10, 11, 12]), 3)
+                    .otherwise(4))
 
     print("  ✓ Calculated fiscal year and quarter")
 
@@ -114,6 +119,7 @@ try:
 
     # Determine is_first_purchase using window function
     from pyspark.sql.window import Window
+
     window_spec = Window.partitionBy("customer_id").orderBy("transaction_timestamp")
 
     silver_df = silver_df \
@@ -127,10 +133,13 @@ try:
     # In production, you'd join with a holiday calendar dimension table
     silver_df = silver_df \
         .withColumn("is_holiday",
-                   when((month(col("transaction_date")) == 1) & (dayofweek(col("transaction_date")) == 1), True)  # New Year's Day
-                   .when((month(col("transaction_date")) == 7) & (dayofweek(col("transaction_date")) == 4), True)  # Independence Day
-                   .when((month(col("transaction_date")) == 12) & (dayofweek(col("transaction_date")) == 25), True)  # Christmas
-                   .otherwise(False))
+                    when((month(col("transaction_date")) == 1) & (dayofweek(col("transaction_date")) == 1),
+                         True)  # New Year's Day
+                    .when((month(col("transaction_date")) == 7) & (dayofweek(col("transaction_date")) == 4),
+                          True)  # Independence Day
+                    .when((month(col("transaction_date")) == 12) & (dayofweek(col("transaction_date")) == 25),
+                          True)  # Christmas
+                    .otherwise(False))
 
     print("  ✓ Added holiday indicator")
 
@@ -219,7 +228,8 @@ try:
     print("=" * 80)
     print(f"Input records (bronze):  {initial_count:,}")
     print(f"Output records (silver): {final_count:,}")
-    print(f"Data quality: {((final_count - null_transaction_ids - null_customer_ids) / final_count * 100):.2f}% valid records")
+    print(
+        f"Data quality: {((final_count - null_transaction_ids - null_customer_ids) / final_count * 100):.2f}% valid records")
 
     # Partition statistics
     print("\nPartition distribution:")
@@ -238,6 +248,7 @@ try:
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

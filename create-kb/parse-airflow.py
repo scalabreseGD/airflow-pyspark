@@ -1,15 +1,43 @@
+"""
+Airflow DAG Parser and Memgraph Knowledge Base Builder
+
+This script extracts DAG metadata from Airflow's REST API and loads it into Memgraph
+as a graph database for analysis.
+
+Graph Structure:
+    DAG --[CONTAINS]--> Task --[EXECUTES]--> SparkJob
+    Task --[DEPENDS_ON]--> Task
+    Task --[TRIGGERS]--> DAG
+
+Node Types:
+    - DAG: Airflow DAG with metadata (total_tasks, spark_tasks)
+    - Task: Individual task with operator info and dependencies
+    - SparkJob: Spark job configuration (application, resources, args)
+
+SparkJob Properties (focused on analysis):
+    - application: Path to the Spark application
+    - name: Job identifier
+    - conn_id: Spark connection
+    - executor_cores, executor_memory, driver_memory, num_executors: Resource config
+    - packages, py_files, jars, files: Dependencies and libraries
+    - application_args: Runtime arguments
+    - env_vars: Environment variables
+    - conf: Spark configuration dictionary
+"""
+
 import json
 from typing import Dict, List, Optional, Any
+
 import requests
 
 try:
     from neo4j import GraphDatabase
+
     NEO4J_AVAILABLE = True
 except ImportError:
     print("⚠️ neo4j driver not installed. Install with: pip install neo4j")
     GraphDatabase = None
     NEO4J_AVAILABLE = False
-
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -25,6 +53,27 @@ SPARK_OPERATOR_NAMES = {
     "SparkSubmitOperator",
     "DataprocSubmitJobOperator",
     "EmrAddStepsOperator",
+}
+
+SPARK_JOB_PARAMS = {
+    # Core job identification
+    "application",  # Path to the Spark application (e.g., /opt/spark-apps/my_job.py)
+    "name",  # Job name for identification
+    "conn_id",  # Spark connection ID
+    # Resource configuration (for analysis)
+    "executor_cores",  # Number of cores per executor
+    "executor_memory",  # Memory per executor (e.g., "2g")
+    "driver_memory",  # Driver memory (e.g., "1g")
+    "num_executors",  # Number of executors
+    # Dependencies & Libraries (important for understanding job requirements)
+    "packages",  # Maven packages (e.g., spark-sql-kafka, delta-core)
+    "py_files",  # Python dependencies (.zip, .egg, .py files)
+    "jars",  # JAR file dependencies
+    "files",  # Additional files (configs, lookup tables)
+    # Job behavior & configuration
+    "application_args",  # Arguments passed to the Spark application
+    "env_vars",  # Environment variables
+    "conf",  # Spark configuration dictionary
 }
 
 
@@ -107,7 +156,6 @@ class DagASTParser:
 
     def _extract_dependencies(self, tree):
         """Second pass: Extract task dependencies from bitshift operators and methods."""
-        import ast
 
         for stmt in tree.body:
             self._process_statement(stmt)
@@ -149,6 +197,7 @@ class DagASTParser:
                 "operator_type": info["operator_type"],
                 "is_spark_task": is_spark_task,
                 "spark_job": info.get("application") if is_spark_task else None,
+                "spark_params": info.get("spark_params", {}) if is_spark_task else {},
                 "trigger_dag_id": info.get("trigger_dag_id"),
                 "params": info.get("params", {}),
                 "upstream": info["upstream"],
@@ -207,7 +256,10 @@ class DagASTParser:
             "application": None,
             "trigger_dag_id": None,
             "params": {},
+            "spark_params": {},
         }
+
+        is_spark_operator = operator_name in SPARK_OPERATOR_NAMES
 
         for keyword in call_node.keywords:
             key = keyword.arg
@@ -215,10 +267,13 @@ class DagASTParser:
 
             if key == "task_id":
                 task_info["task_id"] = value
-            elif key == "application":
-                task_info["application"] = value
             elif key == "trigger_dag_id":
                 task_info["trigger_dag_id"] = value
+            elif is_spark_operator and key in SPARK_JOB_PARAMS:
+                # Store Spark-specific parameters separately
+                task_info["spark_params"][key] = value
+                if key == "application":
+                    task_info["application"] = value
             else:
                 task_info["params"][key] = value
 
@@ -350,7 +405,7 @@ def collect_airflow_tasks(client: AirflowClient) -> List[Dict]:
 class MemgraphClient:
     """Client for interacting with Memgraph graph database."""
 
-    def __init__(self, uri: str, auth: tuple):
+    def __init__(self, uri: str, auth: tuple[str, str]):
         self.uri = uri
         self.auth = auth
         self.driver = None
@@ -362,7 +417,7 @@ class MemgraphClient:
             return False
 
         try:
-            self.driver = GraphDatabase.driver(self.uri, auth=self.auth)
+            self.driver = GraphDatabase.driver(uri=self.uri, auth=self.auth)
             self.driver.verify_connectivity()
             print(f"✅ Connected to Memgraph at {self.uri}")
             return True
@@ -403,6 +458,9 @@ class MemgraphClient:
             # Create Task nodes
             self._create_task_nodes(tasks)
 
+            # Create SparkJob nodes
+            self._create_spark_job_nodes(tasks)
+
             # Create dependencies
             self._create_dependencies(tasks)
 
@@ -414,7 +472,25 @@ class MemgraphClient:
 
             print(f"\n🎉 Successfully loaded data into Memgraph!")
             print(f"   📍 Access Memgraph Lab at: http://localhost:3000")
-            print(f"   💡 Example query: MATCH (d:DAG)-[:CONTAINS]->(t:Task) RETURN d, t LIMIT 25")
+            print(f"\n   💡 Example Analysis Queries:")
+            print(f"      - View all pipelines with resources:")
+            print(f"        MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:EXECUTES]->(sj:SparkJob)")
+            print(f"        RETURN d.dag_id, t.task_id, sj.application, sj.executor_memory, sj.num_executors")
+            print(f"")
+            print(f"      - Find jobs using specific packages (e.g., Kafka):")
+            print(f"        MATCH (sj:SparkJob)")
+            print(f"        WHERE sj.packages CONTAINS 'kafka'")
+            print(f"        RETURN sj.application, sj.packages")
+            print(f"")
+            print(f"      - Find resource-intensive jobs:")
+            print(f"        MATCH (sj:SparkJob)")
+            print(f"        WHERE sj.num_executors > 5 OR sj.executor_memory >= '4g'")
+            print(f"        RETURN sj.application, sj.num_executors, sj.executor_memory")
+            print(f"")
+            print(f"      - Analyze job dependencies:")
+            print(f"        MATCH (sj:SparkJob)")
+            print(f"        WHERE sj.packages IS NOT NULL OR sj.jars IS NOT NULL")
+            print(f"        RETURN sj.application, sj.packages, sj.py_files, sj.jars")
 
         except Exception as e:
             print(f"⚠️ Error loading data to Memgraph: {e}")
@@ -428,7 +504,8 @@ class MemgraphClient:
 
             query = """
             MERGE (d:DAG {dag_id: $dag_id})
-            SET d.total_tasks = $total_tasks,
+            SET d.name = $dag_id,
+                d.total_tasks = $total_tasks,
                 d.spark_tasks = $spark_tasks,
                 d.updated_at = timestamp()
             """
@@ -450,7 +527,8 @@ class MemgraphClient:
             query = """
             MATCH (d:DAG {dag_id: $dag_id})
             MERGE (t:Task {task_id: $task_id, dag_id: $dag_id})
-            SET t.operator_type = $operator_type,
+            SET t.name = $task_id,
+                t.operator_type = $operator_type,
                 t.is_spark_task = $is_spark_task,
                 t.spark_job = $spark_job,
                 t.params = $params,
@@ -469,6 +547,88 @@ class MemgraphClient:
             )
 
         print(f"   ✅ Created {len(tasks)} Task nodes")
+
+    def _create_spark_job_nodes(self, tasks: List[Dict]):
+        """Create SparkJob nodes and link them to Task nodes."""
+        spark_tasks = [t for t in tasks if t.get("is_spark_task") and t.get("spark_params")]
+
+        for task in spark_tasks:
+            spark_params = task.get("spark_params", {})
+
+            # Create unique job identifier
+            job_name = spark_params.get("name", "unnamed-spark-job")
+            application = spark_params.get("application", "")
+
+            # Create a unique job ID based on application path
+            if application:
+                # Extract just the filename from the application path
+                job_id = application.split("/")[-1] if "/" in application else application
+                job_id = job_id.replace(".py", "").replace(".jar", "")
+            else:
+                job_id = f"{task['dag_id']}_{task['task_id']}_spark_job"
+
+            # Convert complex types to JSON strings for storage
+            conf = json.dumps(spark_params.get("conf")) if spark_params.get("conf") else None
+            application_args = json.dumps(spark_params.get("application_args")) if spark_params.get(
+                "application_args") else None
+            env_vars = json.dumps(spark_params.get("env_vars")) if spark_params.get("env_vars") else None
+
+            query = """
+            MERGE (sj:SparkJob {job_id: $job_id})
+            SET sj.name = $name,
+                sj.application = $application,
+                sj.conn_id = $conn_id,
+                sj.executor_cores = $executor_cores,
+                sj.executor_memory = $executor_memory,
+                sj.driver_memory = $driver_memory,
+                sj.num_executors = $num_executors,
+                sj.packages = $packages,
+                sj.py_files = $py_files,
+                sj.jars = $jars,
+                sj.files = $files,
+                sj.application_args = $application_args,
+                sj.env_vars = $env_vars,
+                sj.conf = $conf,
+                sj.updated_at = timestamp()
+            """
+
+            self.driver.execute_query(
+                query,
+                job_id=job_id,
+                name=spark_params.get("name"),
+                application=spark_params.get("application"),
+                conn_id=spark_params.get("conn_id"),
+                executor_cores=spark_params.get("executor_cores"),
+                executor_memory=spark_params.get("executor_memory"),
+                driver_memory=spark_params.get("driver_memory"),
+                num_executors=spark_params.get("num_executors"),
+                packages=spark_params.get("packages"),
+                py_files=spark_params.get("py_files"),
+                jars=spark_params.get("jars"),
+                files=spark_params.get("files"),
+                application_args=application_args,
+                env_vars=env_vars,
+                conf=conf,
+                database_="memgraph"
+            )
+
+            # Create relationship between Task and SparkJob
+            link_query = """
+            MATCH (t:Task {task_id: $task_id, dag_id: $dag_id})
+            MATCH (sj:SparkJob {job_id: $job_id})
+            MERGE (t)-[:EXECUTES]->(sj)
+            """
+
+            self.driver.execute_query(
+                link_query,
+                task_id=task["task_id"],
+                dag_id=task["dag_id"],
+                job_id=job_id,
+                database_="memgraph"
+            )
+
+        if spark_tasks:
+            print(f"   ✅ Created {len(spark_tasks)} SparkJob nodes")
 
     def _create_dependencies(self, tasks: List[Dict]):
         """Create DEPENDS_ON relationships between tasks."""
@@ -534,6 +694,7 @@ class MemgraphClient:
             self.driver.execute_query("CREATE INDEX ON :DAG(dag_id);", database_="memgraph")
             self.driver.execute_query("CREATE INDEX ON :Task(task_id);", database_="memgraph")
             self.driver.execute_query("CREATE INDEX ON :Task(dag_id);", database_="memgraph")
+            self.driver.execute_query("CREATE INDEX ON :SparkJob(job_id);", database_="memgraph")
             print("   ✅ Created indexes")
         except Exception:
             # Indexes might already exist
@@ -566,6 +727,49 @@ def main():
         for task in spark_tasks:
             print(f"  • {task['dag_id']}.{task['task_id']}")
             print(f"    - Application: {task['spark_job']}")
+
+            spark_params = task.get("spark_params", {})
+            if spark_params:
+                print(f"    - Spark Configuration:")
+                if spark_params.get("name"):
+                    print(f"      • Name: {spark_params['name']}")
+                if spark_params.get("conn_id"):
+                    print(f"      • Connection: {spark_params['conn_id']}")
+
+                # Resource configuration
+                resources = []
+                if spark_params.get("num_executors"):
+                    resources.append(f"{spark_params['num_executors']} executors")
+                if spark_params.get("executor_cores"):
+                    resources.append(f"{spark_params['executor_cores']} cores/executor")
+                if spark_params.get("executor_memory"):
+                    resources.append(f"{spark_params['executor_memory']} memory/executor")
+                if spark_params.get("driver_memory"):
+                    resources.append(f"{spark_params['driver_memory']} driver memory")
+                if resources:
+                    print(f"      • Resources: {', '.join(resources)}")
+
+                # Dependencies & Libraries
+                dependencies = []
+                if spark_params.get("packages"):
+                    dependencies.append(f"packages: {spark_params['packages']}")
+                if spark_params.get("py_files"):
+                    dependencies.append(f"py_files: {spark_params['py_files']}")
+                if spark_params.get("jars"):
+                    dependencies.append(f"jars: {spark_params['jars']}")
+                if spark_params.get("files"):
+                    dependencies.append(f"files: {spark_params['files']}")
+                if dependencies:
+                    print(f"      • Dependencies: {', '.join(dependencies)}")
+
+                # Arguments & Configuration
+                if spark_params.get("application_args"):
+                    print(f"      • Args: {spark_params['application_args']}")
+                if spark_params.get("env_vars"):
+                    print(f"      • Env Vars: {len(spark_params['env_vars'])} variables")
+                if spark_params.get("conf"):
+                    print(f"      • Spark Config: {len(spark_params['conf'])} parameters")
+
             if task.get("upstream"):
                 print(f"    - Upstream: {task['upstream']}")
             if task.get("downstream"):

@@ -7,17 +7,25 @@ Input: silver.subscriptions
 Output: gold.subscription_health (Parquet, partitioned by analysis_date)
 """
 
+import argparse
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, count, sum as spark_sum, avg, countDistinct, current_timestamp,
-    current_date, when, desc, lit, datediff, months_between
+    col, count, sum as spark_sum, avg, current_timestamp,
+    current_date, when, lit
 )
 
 print("=" * 80)
 print("  Gold Layer - Subscription Health")
 print("=" * 80)
 
-spark = SparkSession.builder.appName("GoldSubscriptionHealth").enableHiveSupport().getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     # Read subscriptions
@@ -79,7 +87,8 @@ try:
 
     # Write to gold
     print("\nWriting to gold.subscription_health...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable("gold.subscription_health")
+    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable(
+        "gold.subscription_health")
 
     print(f"\n✓ Successfully created subscription health for {final_df.count():,} plans")
     print("\n" + "=" * 80)
@@ -89,6 +98,7 @@ try:
 except Exception as e:
     print(f"\n❌ ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 finally:

@@ -58,20 +58,6 @@ def check_prerequisites(**context):
     return True
 
 
-def verify_ingestion_results(**context):
-    """
-    Verify the ingestion results after the Spark job completes.
-    """
-
-    print("Verifying bronze data ingestion results...")
-
-    # This is a placeholder - in production, you'd connect to the metastore
-    # and verify record counts, data quality, etc.
-
-    print("✓ Ingestion verification completed")
-    return True
-
-
 # Task 1: Check prerequisites (optional but recommended)
 check_prerequisites_task = PythonOperator(
     task_id='check_prerequisites',
@@ -101,16 +87,9 @@ ingest_bronze_data = SparkSubmitOperator(
         'spark.hadoop.fs.s3a.aws.credentials.provider': 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider',
     },
     verbose=True,
-    dag=dag,
-)
-
-# Task 3: Verify ingestion results (optional but recommended)
-verify_ingestion_task = PythonOperator(
-    task_id='verify_ingestion',
-    python_callable=verify_ingestion_results,
-    provide_context=True,
+    name='IngestBronzeData',
     dag=dag,
 )
 
 # Define task dependencies
-check_prerequisites_task >> ingest_bronze_data >> verify_ingestion_task
+check_prerequisites_task >> ingest_bronze_data

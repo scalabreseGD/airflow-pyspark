@@ -20,12 +20,13 @@ Usage:
     ./submit.sh gold_cohort_analysis.py
 """
 
+import argparse
 from datetime import datetime
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, min as spark_min, max as spark_max, count, sum as spark_sum, avg, countDistinct,
-    year, month, datediff, current_timestamp, lit, months_between, floor,
+    datediff, current_timestamp, lit, months_between, floor,
     when, last_day, add_months, to_date
 )
 from pyspark.sql.window import Window
@@ -34,10 +35,13 @@ print("=" * 80)
 print("  Gold Layer - Cohort Analysis")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("GoldCohortAnalysis") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting analysis at: {datetime.now()}")
@@ -94,8 +98,8 @@ try:
     cohort_initial_sizes = transactions_with_cohort \
         .filter(col("months_since_first_purchase") == 0) \
         .groupBy("cohort_month").agg(
-            countDistinct("customer_id").alias("cohort_size")
-        )
+        countDistinct("customer_id").alias("cohort_size")
+    )
 
     print("  ✓ Calculated cohort initial sizes")
 
@@ -150,12 +154,13 @@ try:
         count("*").alias("customer_orders")
     ).filter(col("customer_orders") > 1) \
         .groupBy("cohort_month", "months_since_first_purchase").agg(
-            count("*").alias("repeat_customers_count")
-        )
+        count("*").alias("repeat_customers_count")
+    )
 
     cohort_analysis_df = cohort_analysis_df.join(
         repeat_customers, on=["cohort_month", "months_since_first_purchase"], how="left"
-    ).withColumn("repeat_customers_count", when(col("repeat_customers_count").isNull(), 0).otherwise(col("repeat_customers_count")))
+    ).withColumn("repeat_customers_count",
+                 when(col("repeat_customers_count").isNull(), 0).otherwise(col("repeat_customers_count")))
 
     cohort_analysis_df = cohort_analysis_df \
         .withColumn("cumulative_orders",
@@ -188,9 +193,9 @@ try:
             .withColumn("months_since_first_purchase",
                         floor(months_between(col("subscription_month"), col("cohort_month"))).cast("INT")) \
             .groupBy("cohort_month", "months_since_first_purchase").agg(
-                countDistinct("customer_id").alias("subscribers"),
-                avg("subscription_amount").alias("avg_sub_value")
-            )
+            countDistinct("customer_id").alias("subscribers"),
+            avg("subscription_amount").alias("avg_sub_value")
+        )
 
         final_df = cohort_analysis_df.join(
             subscription_adoption, on=["cohort_month", "months_since_first_purchase"], how="left"
@@ -264,12 +269,12 @@ try:
     final_df.filter(col("cohort_month") == latest_cohort) \
         .orderBy("months_since_first_purchase") \
         .select(
-            "months_since_first_purchase",
-            "cohort_size",
-            "customers_active",
-            "retention_rate",
-            "cumulative_avg_revenue_per_customer"
-        ).show(12, truncate=False)
+        "months_since_first_purchase",
+        "cohort_size",
+        "customers_active",
+        "retention_rate",
+        "cumulative_avg_revenue_per_customer"
+    ).show(12, truncate=False)
 
     # Summary statistics
     print("\n" + "=" * 80)
@@ -296,12 +301,15 @@ try:
     print("  SUCCESS! Cohort analysis complete")
     print("=" * 80)
     print("\nQuery examples:")
-    print("  spark.sql('SELECT * FROM gold.cohort_analysis WHERE months_since_first_purchase <= 6 ORDER BY cohort_month, months_since_first_purchase').show()")
-    print("  spark.sql('SELECT cohort_month, MAX(cumulative_avg_revenue_per_customer) as ltv FROM gold.cohort_analysis GROUP BY cohort_month ORDER BY cohort_month').show()")
+    print(
+        "  spark.sql('SELECT * FROM gold.cohort_analysis WHERE months_since_first_purchase <= 6 ORDER BY cohort_month, months_since_first_purchase').show()")
+    print(
+        "  spark.sql('SELECT cohort_month, MAX(cumulative_avg_revenue_per_customer) as ltv FROM gold.cohort_analysis GROUP BY cohort_month ORDER BY cohort_month').show()")
 
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

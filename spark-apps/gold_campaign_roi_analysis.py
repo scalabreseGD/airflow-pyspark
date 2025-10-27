@@ -18,6 +18,7 @@ Usage:
     ./submit.sh gold_campaign_roi_analysis.py
 """
 
+import argparse
 from datetime import datetime
 
 from pyspark.sql import SparkSession
@@ -33,10 +34,13 @@ print("=" * 80)
 print("  Gold Layer - Campaign ROI Analysis")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("GoldCampaignROI") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting analysis at: {datetime.now()}")

@@ -49,7 +49,7 @@ Technology Stack:
 - **Jupyter Notebooks**: Interactive development and table creation
 - **Full S3A protocol support**: Direct reads/writes to MinIO
 - **Partitioned tables**: Optimized for performance and cost
-- **Knowledge Graph**: Automatic DAG visualization and lineage tracking with Memgraph
+- **Knowledge Graph**: Automatic DAG visualization, Spark job tracking, and resource analysis with Memgraph
 
 ## Quick Start
 
@@ -234,7 +234,11 @@ The project includes automated knowledge graph generation that extracts DAG meta
 - **Automatic DAG Discovery**: Extracts all DAGs, tasks, and dependencies from Airflow
 - **AST Parsing**: Analyzes DAG Python files to understand task relationships
 - **Graph Database**: Stores pipeline metadata in Memgraph for querying and visualization
-- **Spark Job Tracking**: Identifies and tracks all Spark jobs in your pipeline
+- **Comprehensive Spark Job Tracking**: 
+  - Application paths and configurations
+  - Resource allocation (memory, cores, executors)
+  - Dependencies (packages, JARs, py_files)
+  - Environment variables and Spark configs
 - **Real-time Updates**: Refresh the graph anytime to reflect current pipeline state
 - **Custom Airflow Plugin**: Extends Airflow REST API to expose DAG source code
 
@@ -276,11 +280,23 @@ The project includes automated knowledge graph generation that extracts DAG meta
 
 ### What It Captures
 
-- DAG nodes with task counts and Spark job metrics
-- Task nodes with operator types, parameters, and Spark applications
-- Dependency relationships (>>, <<, set_upstream/downstream)
-- Trigger relationships (TriggerDagRunOperator)
+- **DAG nodes** with task counts and Spark job metrics
+- **Task nodes** with operator types, parameters, and relationships
+- **SparkJob nodes** with comprehensive configuration:
+  - Resource allocation (executor memory, cores, number of executors)
+  - Dependencies (Maven packages, JARs, Python files)
+  - Environment variables and Spark configurations
+  - Application paths and arguments
+- **Dependency relationships** (>>, <<, set_upstream/downstream)
+- **Trigger relationships** (TriggerDagRunOperator)
 - Complete data lineage through bronze → silver → gold
+
+### Analysis Capabilities
+
+- **Resource Optimization**: Identify over/under-provisioned Spark jobs
+- **Dependency Tracking**: See which jobs use Kafka, Delta Lake, or other libraries
+- **Configuration Analysis**: Compare resource allocations across similar jobs
+- **Impact Analysis**: Understand downstream effects of changes
 
 See [create-kb/README.md](create-kb/README.md) for detailed documentation, examples, and query recipes.
 

@@ -22,17 +22,22 @@ Usage:
     ./submit.sh bronze_to_silver_inventory_snapshots.py
 """
 
+import argparse
 from datetime import datetime
+
 from pyspark.sql import SparkSession
 
 print("=" * 80)
 print("  Bronze to Silver - Inventory Snapshots Transformation (Spark SQL)")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("BronzeToSilverInventorySnapshots") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
@@ -127,17 +132,16 @@ try:
     final_count = spark.sql("SELECT COUNT(*) as cnt FROM silver.inventory_snapshots").collect()[0]['cnt']
 
     quality_metrics = spark.sql("""
-        SELECT
-            COUNT(*) as total_records,
-            SUM(CASE WHEN snapshot_id IS NULL THEN 1 ELSE 0 END) as null_snapshot_ids,
-            SUM(CASE WHEN product_id IS NULL THEN 1 ELSE 0 END) as null_product_ids,
-            SUM(CASE WHEN warehouse_id IS NULL THEN 1 ELSE 0 END) as null_warehouse_ids,
-            SUM(CASE WHEN is_stockout THEN 1 ELSE 0 END) as stockout_count,
-            SUM(CASE WHEN stock_status = 'low_stock' THEN 1 ELSE 0 END) as low_stock_count,
-            SUM(CASE WHEN stock_status = 'in_stock' THEN 1 ELSE 0 END) as in_stock_count,
-            SUM(CASE WHEN stock_status = 'overstock' THEN 1 ELSE 0 END) as overstock_count
-        FROM silver.inventory_snapshots
-    """).collect()[0]
+                                SELECT COUNT(*)                                                    as total_records,
+                                       SUM(CASE WHEN snapshot_id IS NULL THEN 1 ELSE 0 END)        as null_snapshot_ids,
+                                       SUM(CASE WHEN product_id IS NULL THEN 1 ELSE 0 END)         as null_product_ids,
+                                       SUM(CASE WHEN warehouse_id IS NULL THEN 1 ELSE 0 END)       as null_warehouse_ids,
+                                       SUM(CASE WHEN is_stockout THEN 1 ELSE 0 END)                as stockout_count,
+                                       SUM(CASE WHEN stock_status = 'low_stock' THEN 1 ELSE 0 END) as low_stock_count,
+                                       SUM(CASE WHEN stock_status = 'in_stock' THEN 1 ELSE 0 END)  as in_stock_count,
+                                       SUM(CASE WHEN stock_status = 'overstock' THEN 1 ELSE 0 END) as overstock_count
+                                FROM silver.inventory_snapshots
+                                """).collect()[0]
 
     print(f"  ✓ Final record count: {final_count:,}")
     print(f"  ✓ Records with null snapshot_id: {quality_metrics['null_snapshot_ids']}")
@@ -148,11 +152,13 @@ try:
     print(f"  ✓ In stock records: {quality_metrics['in_stock_count']}")
     print(f"  ✓ Overstock records: {quality_metrics['overstock_count']}")
 
-    if quality_metrics['null_snapshot_ids'] > 0 or quality_metrics['null_product_ids'] > 0 or quality_metrics['null_warehouse_ids'] > 0:
+    if quality_metrics['null_snapshot_ids'] > 0 or quality_metrics['null_product_ids'] > 0 or quality_metrics[
+        'null_warehouse_ids'] > 0:
         print("  ⚠️  Warning: Found null values in key fields")
 
     # Calculate data quality percentage
-    null_keys = max(quality_metrics['null_snapshot_ids'], quality_metrics['null_product_ids'], quality_metrics['null_warehouse_ids'])
+    null_keys = max(quality_metrics['null_snapshot_ids'], quality_metrics['null_product_ids'],
+                    quality_metrics['null_warehouse_ids'])
     valid_records = final_count - null_keys
     quality_pct = (valid_records / final_count * 100) if final_count > 0 else 0
 
@@ -161,20 +167,18 @@ try:
     print("  Sample Data from silver.inventory_snapshots")
     print("=" * 80)
     spark.sql("""
-        SELECT
-            snapshot_id,
-            snapshot_date,
-            product_id,
-            warehouse_id,
-            quantity_on_hand,
-            quantity_reserved,
-            quantity_available,
-            days_of_supply,
-            stock_status,
-            is_stockout
-        FROM silver.inventory_snapshots
-        LIMIT 5
-    """).show(truncate=False)
+              SELECT snapshot_id,
+                     snapshot_date,
+                     product_id,
+                     warehouse_id,
+                     quantity_on_hand,
+                     quantity_reserved,
+                     quantity_available,
+                     days_of_supply,
+                     stock_status,
+                     is_stockout
+              FROM silver.inventory_snapshots LIMIT 5
+              """).show(truncate=False)
 
     # Summary statistics
     print("\n" + "=" * 80)
@@ -187,58 +191,53 @@ try:
     # Business metrics summary
     print("\n[4/4] Business Metrics Summary:")
     spark.sql("""
-        SELECT
-            COUNT(*) as total_snapshots,
-            COUNT(DISTINCT product_id) as unique_products,
-            COUNT(DISTINCT warehouse_id) as unique_warehouses,
-            SUM(quantity_on_hand) as total_qty_on_hand,
-            SUM(quantity_reserved) as total_qty_reserved,
-            SUM(quantity_available) as total_qty_available,
-            AVG(days_of_supply) as avg_days_of_supply
-        FROM silver.inventory_snapshots
-    """).show(truncate=False)
+              SELECT COUNT(*)                     as total_snapshots,
+                     COUNT(DISTINCT product_id)   as unique_products,
+                     COUNT(DISTINCT warehouse_id) as unique_warehouses,
+                     SUM(quantity_on_hand)        as total_qty_on_hand,
+                     SUM(quantity_reserved)       as total_qty_reserved,
+                     SUM(quantity_available)      as total_qty_available,
+                     AVG(days_of_supply)          as avg_days_of_supply
+              FROM silver.inventory_snapshots
+              """).show(truncate=False)
 
     # Stock status distribution
     print("\nStock status distribution:")
     spark.sql("""
-        SELECT
-            stock_status,
-            COUNT(*) as count,
+              SELECT stock_status,
+                     COUNT(*) as count,
             ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
-        FROM silver.inventory_snapshots
-        GROUP BY stock_status
-        ORDER BY count DESC
-    """).show()
+              FROM silver.inventory_snapshots
+              GROUP BY stock_status
+              ORDER BY count DESC
+              """).show()
 
     # Warehouse inventory summary
     print("\nWarehouse inventory summary:")
     spark.sql("""
-        SELECT
-            warehouse_id,
-            COUNT(*) as product_count,
-            SUM(quantity_available) as total_available,
-            SUM(CASE WHEN is_stockout THEN 1 ELSE 0 END) as stockout_count,
-            ROUND(AVG(days_of_supply), 1) as avg_days_supply
-        FROM silver.inventory_snapshots
-        GROUP BY warehouse_id
-        ORDER BY warehouse_id
-    """).show()
+              SELECT warehouse_id,
+                     COUNT(*)                                     as product_count,
+                     SUM(quantity_available)                      as total_available,
+                     SUM(CASE WHEN is_stockout THEN 1 ELSE 0 END) as stockout_count,
+                     ROUND(AVG(days_of_supply), 1)                as avg_days_supply
+              FROM silver.inventory_snapshots
+              GROUP BY warehouse_id
+              ORDER BY warehouse_id
+              """).show()
 
     # Low stock and stockout products
     print("\nProducts needing attention (low stock or stockout):")
     spark.sql("""
-        SELECT
-            product_id,
-            warehouse_id,
-            quantity_available,
-            reorder_point,
-            stock_status,
-            is_stockout
-        FROM silver.inventory_snapshots
-        WHERE stock_status IN ('low_stock', 'out_of_stock')
-        ORDER BY quantity_available
-        LIMIT 10
-    """).show()
+              SELECT product_id,
+                     warehouse_id,
+                     quantity_available,
+                     reorder_point,
+                     stock_status,
+                     is_stockout
+              FROM silver.inventory_snapshots
+              WHERE stock_status IN ('low_stock', 'out_of_stock')
+              ORDER BY quantity_available LIMIT 10
+              """).show()
 
     print("\n" + "=" * 80)
     print("  SUCCESS! Inventory snapshots transformed to silver layer using Spark SQL")
@@ -251,6 +250,7 @@ try:
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

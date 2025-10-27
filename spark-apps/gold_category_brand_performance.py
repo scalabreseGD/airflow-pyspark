@@ -11,14 +11,21 @@ Usage:
     ./submit.sh gold_category_brand_performance.py
 """
 
-from datetime import datetime
+import argparse
+
 from pyspark.sql import SparkSession
 
 print("=" * 80)
 print("  Gold Layer - Category & Brand Performance (Spark SQL)")
 print("=" * 80)
 
-spark = SparkSession.builder.appName("GoldCategoryBrandPerformance").enableHiveSupport().getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
 
@@ -252,46 +259,45 @@ try:
     print("  Top Categories by Revenue (Current Period)")
     print("=" * 80)
     spark.sql("""
-        SELECT
-            category_level1,
-            brand,
-            SUM(total_revenue) as revenue,
-            AVG(revenue_growth_yoy) as avg_yoy_growth,
-            MAX(revenue_rank_in_category) as best_rank
-        FROM gold.category_brand_performance
-        WHERE time_period = 'monthly'
-        GROUP BY category_level1, brand
-        ORDER BY revenue DESC
-        LIMIT 10
-    """).show(truncate=False)
+              SELECT category_level1,
+                     brand,
+                     SUM(total_revenue)            as revenue,
+                     AVG(revenue_growth_yoy)       as avg_yoy_growth,
+                     MAX(revenue_rank_in_category) as best_rank
+              FROM gold.category_brand_performance
+              WHERE time_period = 'monthly'
+              GROUP BY category_level1, brand
+              ORDER BY revenue DESC LIMIT 10
+              """).show(truncate=False)
 
     print("\n" + "=" * 80)
     print("  Category Growth Leaders")
     print("=" * 80)
     spark.sql("""
-        SELECT
-            category_level1,
-            brand,
-            total_revenue,
-            revenue_growth_yoy,
-            growth_rank_in_category
-        FROM gold.category_brand_performance
-        WHERE time_period = 'monthly'
-          AND revenue_growth_yoy > 0
-        ORDER BY revenue_growth_yoy DESC
-        LIMIT 10
-    """).show(truncate=False)
+              SELECT category_level1,
+                     brand,
+                     total_revenue,
+                     revenue_growth_yoy,
+                     growth_rank_in_category
+              FROM gold.category_brand_performance
+              WHERE time_period = 'monthly'
+                AND revenue_growth_yoy > 0
+              ORDER BY revenue_growth_yoy DESC LIMIT 10
+              """).show(truncate=False)
 
     print("\n" + "=" * 80)
     print("  SUCCESS! Category & brand performance complete")
     print("=" * 80)
     print("\nQuery examples:")
-    print("  spark.sql('SELECT * FROM gold.category_brand_performance WHERE category_level1 = \"Electronics\" ORDER BY total_revenue DESC').show()")
-    print("  spark.sql('SELECT category_level1, AVG(revenue_growth_yoy) FROM gold.category_brand_performance GROUP BY category_level1').show()")
+    print(
+        "  spark.sql('SELECT * FROM gold.category_brand_performance WHERE category_level1 = \"Electronics\" ORDER BY total_revenue DESC').show()")
+    print(
+        "  spark.sql('SELECT category_level1, AVG(revenue_growth_yoy) FROM gold.category_brand_performance GROUP BY category_level1').show()")
 
 except Exception as e:
     print(f"\n❌ ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 finally:

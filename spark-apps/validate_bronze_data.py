@@ -20,17 +20,22 @@ Exit codes:
     1 - One or more tables are empty (FAILURE)
 """
 
-from pyspark.sql import SparkSession
+import argparse
 import sys
+
+from pyspark.sql import SparkSession
 
 print("=" * 80)
 print("  BRONZE DATA VALIDATION")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("ValidateBronzeData") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 # Define all bronze tables to validate
 bronze_tables = [

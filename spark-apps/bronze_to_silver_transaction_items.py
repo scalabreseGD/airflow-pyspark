@@ -19,8 +19,10 @@ Usage:
     ./submit.sh bronze_to_silver_transaction_items.py
 """
 
+import argparse
 from datetime import datetime
-from pyspark.sql import SparkSession, DataFrame
+
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, when, current_timestamp, lit, expr, coalesce
 )
@@ -29,10 +31,13 @@ print("=" * 80)
 print("  Bronze to Silver - Transaction Items Transformation")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("BronzeToSilverTransactionItems") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
@@ -109,9 +114,9 @@ try:
     # Handle division by zero
     silver_df = silver_df \
         .withColumn("line_margin_percentage",
-                   when(col("line_total") > 0,
-                        (col("line_profit") / col("line_total")) * 100)
-                   .otherwise(lit(0.0)))
+                    when(col("line_total") > 0,
+                         (col("line_profit") / col("line_total")) * 100)
+                    .otherwise(lit(0.0)))
 
     print("  ✓ Calculated line-level financial metrics")
 
@@ -229,6 +234,7 @@ try:
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

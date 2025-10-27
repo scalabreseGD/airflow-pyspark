@@ -15,6 +15,7 @@ Usage:
     ./submit.sh ingest_bronze_data.py
 """
 
+import argparse
 from datetime import datetime
 
 from pyspark.sql import SparkSession, DataFrame
@@ -24,10 +25,13 @@ print("=" * 80)
 print("  Bronze Data Ingestion")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("IngestBronzeData") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 # Define the bronze tables and their corresponding CSV files
 bronze_tables = [

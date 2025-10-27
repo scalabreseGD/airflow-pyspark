@@ -20,21 +20,26 @@ Usage:
     ./submit.sh bronze_to_silver_subscriptions.py
 """
 
+import argparse
 from datetime import datetime
-from pyspark.sql import SparkSession, DataFrame
+
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, to_date, when, current_timestamp, lit, expr,
-    coalesce, datediff, floor, greatest
+    coalesce, datediff, floor
 )
 
 print("=" * 80)
 print("  Bronze to Silver - Subscriptions Transformation")
 print("=" * 80)
 
-spark = SparkSession.builder \
-    .appName("BronzeToSilverSubscriptions") \
-    .enableHiveSupport() \
-    .getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting transformation at: {datetime.now()}")
@@ -62,9 +67,9 @@ try:
         .withColumn("start_date", to_date(col("start_date"), "yyyy-MM-dd")) \
         .withColumn("end_date", to_date(col("end_date"), "yyyy-MM-dd")) \
         .withColumn("cancellation_date",
-                   when(col("cancellation_date").isNotNull() & (col("cancellation_date") != ""),
-                        to_date(col("cancellation_date"), "yyyy-MM-dd"))
-                   .otherwise(lit(None))) \
+                    when(col("cancellation_date").isNotNull() & (col("cancellation_date") != ""),
+                         to_date(col("cancellation_date"), "yyyy-MM-dd"))
+                    .otherwise(lit(None))) \
         .withColumn("next_billing_date", to_date(col("next_billing_date"), "yyyy-MM-dd"))
 
     print("  ✓ Date casting complete")
@@ -73,15 +78,15 @@ try:
     silver_df = silver_df \
         .withColumn("subscription_amount", col("subscription_amount").cast("DECIMAL(10,2)")) \
         .withColumn("auto_renewal",
-                   when(col("auto_renewal").isin(["true", "True", "1", "yes", "Yes"]), True)
-                   .otherwise(False))
+                    when(col("auto_renewal").isin(["true", "True", "1", "yes", "Yes"]), True)
+                    .otherwise(False))
 
     print("  ✓ Numeric and boolean casting complete")
 
     # Calculate subscription_duration_days
     silver_df = silver_df \
         .withColumn("subscription_duration_days",
-                   coalesce(datediff(col("end_date"), col("start_date")), lit(0)))
+                    coalesce(datediff(col("end_date"), col("start_date")), lit(0)))
 
     print("  ✓ Calculated subscription duration")
 
@@ -89,27 +94,27 @@ try:
     # Assuming monthly = 1 payment per month, quarterly = 1 per 3 months, annually = 1 per year
     silver_df = silver_df \
         .withColumn("total_payments_made",
-                   when(col("billing_frequency") == "monthly",
-                        floor(col("subscription_duration_days") / 30))
-                   .when(col("billing_frequency") == "quarterly",
-                        floor(col("subscription_duration_days") / 90))
-                   .when(col("billing_frequency") == "annually",
-                        floor(col("subscription_duration_days") / 365))
-                   .otherwise(0)
-                   .cast("INT"))
+                    when(col("billing_frequency") == "monthly",
+                         floor(col("subscription_duration_days") / 30))
+                    .when(col("billing_frequency") == "quarterly",
+                          floor(col("subscription_duration_days") / 90))
+                    .when(col("billing_frequency") == "annually",
+                          floor(col("subscription_duration_days") / 365))
+                    .otherwise(0)
+                    .cast("INT"))
 
     # Ensure at least 1 payment if subscription has started
     silver_df = silver_df \
         .withColumn("total_payments_made",
-                   when((col("subscription_duration_days") > 0) & (col("total_payments_made") == 0), 1)
-                   .otherwise(col("total_payments_made")))
+                    when((col("subscription_duration_days") > 0) & (col("total_payments_made") == 0), 1)
+                    .otherwise(col("total_payments_made")))
 
     print("  ✓ Calculated total payments made")
 
     # Calculate lifetime_value
     silver_df = silver_df \
         .withColumn("lifetime_value",
-                   (col("subscription_amount") * col("total_payments_made")).cast("DECIMAL(12,2)"))
+                    (col("subscription_amount") * col("total_payments_made")).cast("DECIMAL(12,2)"))
 
     print("  ✓ Calculated lifetime value")
 
@@ -118,9 +123,9 @@ try:
     # Determine is_churned (if subscription is cancelled or ended)
     silver_df = silver_df \
         .withColumn("is_churned",
-                   when((col("cancellation_date").isNotNull()) |
-                        (col("status").isin(["cancelled", "expired"])), True)
-                   .otherwise(False))
+                    when((col("cancellation_date").isNotNull()) |
+                         (col("status").isin(["cancelled", "expired"])), True)
+                    .otherwise(False))
 
     # Calculate churn_risk_score (0.0 to 1.0)
     # Higher risk if:
@@ -130,21 +135,21 @@ try:
     # - Low number of payments
     silver_df = silver_df \
         .withColumn("days_until_end",
-                   coalesce(datediff(col("end_date"), current_timestamp().cast("date")), lit(999))) \
+                    coalesce(datediff(col("end_date"), current_timestamp().cast("date")), lit(999))) \
         .withColumn("churn_risk_score",
-                   # Start with base risk
-                   when(col("is_churned"), lit(1.0))
-                   # High risk if status is concerning
-                   .when(col("status").isin(["pending_cancellation", "payment_failed"]), lit(0.8))
-                   # Medium-high risk if no auto renewal and close to end
-                   .when((col("auto_renewal") == False) & (col("days_until_end") < 30), lit(0.7))
-                   # Medium risk if no auto renewal
-                   .when(col("auto_renewal") == False, lit(0.5))
-                   # Low-medium risk if few payments made
-                   .when(col("total_payments_made") < 3, lit(0.4))
-                   # Low risk otherwise
-                   .otherwise(lit(0.2))
-                   .cast("DECIMAL(3,2)")) \
+                    # Start with base risk
+                    when(col("is_churned"), lit(1.0))
+                    # High risk if status is concerning
+                    .when(col("status").isin(["pending_cancellation", "payment_failed"]), lit(0.8))
+                    # Medium-high risk if no auto renewal and close to end
+                    .when((col("auto_renewal") == False) & (col("days_until_end") < 30), lit(0.7))
+                    # Medium risk if no auto renewal
+                    .when(col("auto_renewal") == False, lit(0.5))
+                    # Low-medium risk if few payments made
+                    .when(col("total_payments_made") < 3, lit(0.4))
+                    # Low risk otherwise
+                    .otherwise(lit(0.2))
+                    .cast("DECIMAL(3,2)")) \
         .drop("days_until_end")
 
     print("  ✓ Calculated churn indicators")
@@ -277,6 +282,7 @@ try:
 except Exception as e:
     print(f"\n❌ FATAL ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 

@@ -13,12 +13,14 @@ Input: silver.transactions, silver.transaction_items, silver.subscriptions, silv
 Output: gold.customer_360 (Parquet, partitioned by analysis_date)
 """
 
+import argparse
 from datetime import datetime
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, count, sum as spark_sum, avg, max as spark_max, min as spark_min,
     countDistinct, datediff, current_date, current_timestamp, lit, when,
-    coalesce, ntile, desc, year, month, row_number
+    ntile, desc, row_number
 )
 from pyspark.sql.window import Window
 
@@ -26,7 +28,13 @@ print("=" * 80)
 print("  Gold Layer - Customer 360")
 print("=" * 80)
 
-spark = SparkSession.builder.appName("GoldCustomer360").enableHiveSupport().getOrCreate()
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--name", dest="app_name")
+known_args, _ = parser.parse_known_args()
+app_name = known_args.app_name
+
+builder = SparkSession.builder.enableHiveSupport()
+spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 try:
     print(f"\nStarting analysis at: {datetime.now()}")
@@ -65,12 +73,13 @@ try:
         countDistinct(when(col("channel") == "mobile", col("transaction_id"))).alias("mobile_orders"),
         countDistinct(when(col("channel") == "store", col("transaction_id"))).alias("instore_orders"),
         spark_sum(when(col("has_discount"), 1).otherwise(0)).alias("orders_with_discount"),
-        avg(when(col("has_discount"), (col("discount_amount") / col("subtotal") * 100)).otherwise(0)).alias("avg_discount_pct")
+        avg(when(col("has_discount"), (col("discount_amount") / col("subtotal") * 100)).otherwise(0)).alias(
+            "avg_discount_pct")
     )
 
     # Time-based metrics (30d, 90d, 365d)
     customer_metrics = customer_metrics.withColumn("days_since_last_purchase",
-        datediff(current_date(), col("last_purchase_date")))
+                                                   datediff(current_date(), col("last_purchase_date")))
 
     # Join with items for product metrics
     items_summary = items_df.groupBy("transaction_id").agg(
@@ -95,7 +104,7 @@ try:
     customer_profile = customer_profile \
         .withColumn("avg_items_per_order", col("total_items_purchased") / col("total_orders")) \
         .withColumn("purchase_frequency_days",
-            datediff(current_date(), col("first_purchase_date")) / col("total_orders")) \
+                    datediff(current_date(), col("first_purchase_date")) / col("total_orders")) \
         .withColumn("online_order_percentage", col("online_orders") / col("total_orders") * 100) \
         .withColumn("mobile_order_percentage", col("mobile_orders") / col("total_orders") * 100) \
         .withColumn("instore_order_percentage", col("instore_orders") / col("total_orders") * 100) \
@@ -113,25 +122,27 @@ try:
 
     # Segmentation
     customer_profile = customer_profile.withColumn("rfm_segment",
-        when((col("recency_score") >= 4) & (col("frequency_score") >= 4), "Champions")
-        .when((col("recency_score") >= 3) & (col("frequency_score") >= 3), "Loyal Customers")
-        .when(col("days_since_last_purchase") > 180, "At Risk")
-        .otherwise("Regular Customers"))
+                                                   when((col("recency_score") >= 4) & (col("frequency_score") >= 4),
+                                                        "Champions")
+                                                   .when((col("recency_score") >= 3) & (col("frequency_score") >= 3),
+                                                         "Loyal Customers")
+                                                   .when(col("days_since_last_purchase") > 180, "At Risk")
+                                                   .otherwise("Regular Customers"))
 
     # Customer key and predictions (simplified)
     customer_profile = customer_profile \
         .withColumn("customer_key", row_number().over(Window.orderBy("customer_id"))) \
         .withColumn("clv_prediction", col("total_revenue") * 1.5) \
         .withColumn("churn_probability",
-            when(col("days_since_last_purchase") > 180, 0.8)
-            .when(col("days_since_last_purchase") > 90, 0.5)
-            .otherwise(0.2)) \
+                    when(col("days_since_last_purchase") > 180, 0.8)
+                    .when(col("days_since_last_purchase") > 90, 0.5)
+                    .otherwise(0.2)) \
         .withColumn("customer_segment", col("rfm_segment")) \
         .withColumn("lifetime_stage",
-            when(col("total_orders") == 1, "new")
-            .when(col("days_since_last_purchase") > 365, "churned")
-            .when(col("days_since_last_purchase") > 180, "at_risk")
-            .otherwise("active"))
+                    when(col("total_orders") == 1, "new")
+                    .when(col("days_since_last_purchase") > 365, "churned")
+                    .when(col("days_since_last_purchase") > 180, "at_risk")
+                    .otherwise("active"))
 
     # Add analysis date
     final_df = customer_profile \
@@ -210,6 +221,7 @@ try:
 except Exception as e:
     print(f"\n❌ ERROR: {e}")
     import traceback
+
     traceback.print_exc()
     raise
 finally:
