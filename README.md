@@ -203,7 +203,7 @@ The gold layer contains business-level aggregates optimized for reporting and an
 ├── docker-compose.yml              # Services orchestration
 ├── docker/
 │   ├── spark/Dockerfile            # Spark with S3A JARs
-│   ├── hive/Dockerfile             # Hive Metastore with Hadoop 3.3.4
+│   ├── hive/Dockerfile             # Hive Metastore with Hadoop 3.3.5
 │   └── jupyter/Dockerfile          # Jupyter with PySpark
 ├── conf/
 │   ├── hive/                       # Hive Metastore configuration
