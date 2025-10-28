@@ -779,9 +779,9 @@ Gold Layer (Business Analytics)
 - [Spark Configuration](https://spark.apache.org/docs/latest/configuration.html)
 - [Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture)
 
-## Automated Data Lineage with Memgraph
+## Automated Data Lineage with Neo4j
 
-All Spark jobs in this project automatically track and push data lineage to Memgraph using the `lineage_listener` module.
+All Spark jobs in this project automatically track and push data lineage to Neo4j using the `lineage_listener` module.
 
 ### Overview
 
@@ -839,7 +839,7 @@ The listener automatically captures:
 
 #### 3. Graph Structure
 
-The lineage creates a knowledge graph in Memgraph:
+The lineage creates a knowledge graph in Neo4j:
 
 **Nodes:**
 - `(:Dataset {name: "bronze.transactions_raw"})` - Tables and file paths
@@ -873,12 +873,12 @@ Control lineage tracking via environment variables (set in `docker-compose.yml`)
 ```yaml
 environment:
   # Enable/disable lineage tracking
-  LINEAGE_TO_MEMGRAPH: "true"  # default: true
+  LINEAGE_TO_NEO4J: "true"  # default: true
   
-  # Memgraph connection
-  MEMGRAPH_URI: "bolt://memgraph:7687"  # default
-  MEMGRAPH_USER: ""  # optional (default: no auth)
-  MEMGRAPH_PASSWORD: ""  # optional
+  # Neo4j connection
+  NEO4J_URI: "bolt://neo4j:7687"  # default
+  NEO4J_USER: "neo4j"  # default
+  NEO4J_PASSWORD: "neo4j123"  # default
   
   # Debug logging
   LINEAGE_DEBUG: "true"  # default: true (prints lineage events to logs)
@@ -887,21 +887,20 @@ environment:
 To **disable** lineage tracking for a specific job:
 ```python
 import os
-os.environ["LINEAGE_TO_MEMGRAPH"] = "false"
+os.environ["LINEAGE_TO_NEO4J"] = "false"
 
 # Then create SparkSession...
 ```
 
 ### Setup
 
-#### 1. Start Memgraph Services
+#### 1. Start Neo4j
 
 ```bash
-# Start Memgraph and Memgraph Lab
-docker-compose up -d memgraph memgraph-lab
+docker-compose up -d neo4j
 
-# Verify Memgraph is running
-docker-compose ps memgraph
+# Verify Neo4j is running
+docker-compose ps neo4j
 ```
 
 #### 2. Ensure Spark Images Have Neo4j Driver
@@ -933,9 +932,9 @@ Lineage is automatically tracked when jobs run:
 
 ### Viewing Lineage
 
-#### Access Memgraph Lab
+#### Open Neo4j Browser
 
-Open: **http://localhost:3000**
+Open: **http://localhost:7474** (neo4j / neo4j123)
 
 #### Query Examples
 
@@ -1041,15 +1040,14 @@ docker-compose logs spark-worker | grep LINEAGE
 # Should see: [LINEAGE] Enabling lineage for app: ...
 ```
 
-**Verify Memgraph connection:**
+**Verify Neo4j connection:**
 ```bash
-# Check Memgraph is running
-docker-compose ps memgraph
+docker-compose ps neo4j
 
 # Test connection
 docker exec -it spark-master python3 -c "
 from neo4j import GraphDatabase
-driver = GraphDatabase.driver('bolt://memgraph:7687', auth=('', ''))
+driver = GraphDatabase.driver('bolt://neo4j:7687', auth=('neo4j', 'neo4j123'))
 with driver.session() as s:
     result = s.run('RETURN 1')
     print('Connected:', result.single()[0])

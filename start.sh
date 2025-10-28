@@ -34,6 +34,23 @@ fi
 
 print_status "Docker is running"
 
+# Detect host architecture and set default platform for builds
+HOST_UNAME_S=$(uname -s | tr '[:upper:]' '[:lower:]')
+HOST_UNAME_M=$(uname -m)
+case "$HOST_UNAME_M" in
+  x86_64|amd64)
+    DEFAULT_PLATFORM="linux/amd64"
+    ;;
+  arm64|aarch64)
+    DEFAULT_PLATFORM="linux/arm64"
+    ;;
+  *)
+    DEFAULT_PLATFORM="linux/amd64"
+    ;;
+esac
+export DEFAULT_PLATFORM
+print_status "Using platform: $DEFAULT_PLATFORM (host: ${HOST_UNAME_S}/${HOST_UNAME_M})"
+
 # Clean up old containers if requested
 if [ "$1" == "--clean" ]; then
     print_warning "Cleaning up old containers and volumes..."
@@ -45,13 +62,13 @@ fi
 # Build the custom Spark image
 echo
 echo "Building custom Spark image with S3A and Hive support..."
-docker-compose build --no-cache spark-master spark-worker
+DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose build --no-cache spark-master spark-worker
 print_status "Spark image built successfully"
 
 # Start the stack
 echo
 echo "Starting services..."
-docker-compose up -d
+DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose up -d
 
 echo
 echo "Waiting for services to be healthy..."
@@ -65,28 +82,28 @@ while [ $attempt -lt $max_attempts ]; do
     attempt=$((attempt + 1))
 
     # Check MinIO
-    if docker-compose ps minio | grep -q "healthy"; then
+    if DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps minio | grep -q "healthy"; then
         minio_status="${GREEN}✓${NC}"
     else
         minio_status="${YELLOW}...${NC}"
     fi
 
     # Check PostgreSQL
-    if docker-compose ps postgres | grep -q "healthy"; then
+    if DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps postgres | grep -q "healthy"; then
         postgres_status="${GREEN}✓${NC}"
     else
         postgres_status="${YELLOW}...${NC}"
     fi
 
     # Check Hive Metastore
-    if docker-compose ps hive-metastore | grep -q "healthy"; then
+    if DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps hive-metastore | grep -q "healthy"; then
         hive_status="${GREEN}✓${NC}"
     else
         hive_status="${YELLOW}...${NC}"
     fi
 
     # Check Spark Master
-    if docker-compose ps spark-master | grep -q "Up"; then
+    if DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps spark-master | grep -q "Up"; then
         spark_status="${GREEN}✓${NC}"
     else
         spark_status="${YELLOW}...${NC}"
@@ -95,10 +112,10 @@ while [ $attempt -lt $max_attempts ]; do
     echo -ne "\r  MinIO: ${minio_status}  PostgreSQL: ${postgres_status}  Hive: ${hive_status}  Spark: ${spark_status}  "
 
     # Check if all services are healthy
-    if docker-compose ps minio | grep -q "healthy" && \
-       docker-compose ps postgres | grep -q "healthy" && \
-       docker-compose ps hive-metastore | grep -q "healthy" && \
-       docker-compose ps spark-master | grep -q "Up"; then
+    if DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps minio | grep -q "healthy" && \
+       DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps postgres | grep -q "healthy" && \
+       DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps hive-metastore | grep -q "healthy" && \
+       DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose ps spark-master | grep -q "Up"; then
         echo
         print_status "All services are healthy!"
         break

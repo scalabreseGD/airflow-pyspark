@@ -18,7 +18,7 @@ A complete, production-ready data lakehouse implementing the **Medallion Archite
 - **MinIO**: S3-compatible object storage
 - **Jupyter**: Interactive development
 - **PostgreSQL**: Backend for metadata
-- **Memgraph**: Data lineage and knowledge graph
+- **Neo4j**: Data lineage and knowledge graph
 
 ## Getting Started
 
@@ -39,7 +39,7 @@ A complete, production-ready data lakehouse implementing the **Medallion Archite
 - Jupyter: http://localhost:8888 (token in logs)
 - Spark Master: http://localhost:8080
 - MinIO Console: http://localhost:9001 (admin / admin123)
-- Memgraph Lab: http://localhost:3000 (data lineage visualization)
+- Neo4j Browser: http://localhost:7474 (neo4j / neo4j123)
 
 ### Step 2: Configure Airflow
 
@@ -449,17 +449,17 @@ docker-compose restart jupyter
 
 ## Viewing Data Lineage (Optional but Recommended)
 
-All Spark jobs automatically track data lineage and push it to Memgraph. This lets you visualize how data flows through your pipeline.
+All Spark jobs automatically track data lineage and push it to Neo4j. This lets you visualize how data flows through your pipeline.
 
-### Start Memgraph
+### Start Neo4j
 
 ```bash
-docker-compose up -d memgraph memgraph-lab
+docker-compose up -d neo4j
 ```
 
 ### View Lineage
 
-1. Open **Memgraph Lab**: http://localhost:3000
+1. Open **Neo4j Browser**: http://localhost:7474
 2. Run queries to explore your data flows:
 
 **See all data flows:**
@@ -503,17 +503,17 @@ This automatically tracks:
 **Configuration:**
 Lineage tracking is enabled by default. To disable it, set:
 ```bash
-export LINEAGE_TO_MEMGRAPH=false
+export LINEAGE_TO_NEO4J=false
 ```
 
-See [README_AIRFLOW_SPARK.md](README_AIRFLOW_SPARK.md#automated-data-lineage-with-memgraph) for detailed lineage documentation.
+See [README_AIRFLOW_SPARK.md](README_AIRFLOW_SPARK.md#automated-data-lineage-with-neo4j) for detailed lineage documentation.
 
 ## Getting Help
 
 - **Airflow UI**: http://localhost:8082 - View DAG runs and logs
 - **Spark UI**: http://localhost:8080 - Monitor Spark jobs
 - **MinIO Console**: http://localhost:9001 - Browse data files
-- **Memgraph Lab**: http://localhost:3000 - View data lineage (if Memgraph is running)
+- **Neo4j Browser**: http://localhost:7474 - View data lineage (if Neo4j is running)
 - **Logs**: `docker-compose logs -f <service>`
 
 ## Ready to Go!
@@ -524,6 +524,6 @@ You're all set! You now have:
 - Empty silver and gold layers ready for your transformations
 - Airflow orchestrating workflows
 - Jupyter for development
-- Automatic data lineage tracking to Memgraph
+- Automatic data lineage tracking to Neo4j
 
 Start building your silver and gold transformations and create a complete ETL pipeline!

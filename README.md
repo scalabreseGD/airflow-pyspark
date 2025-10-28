@@ -38,7 +38,7 @@ Technology Stack:
          ├─────────→ Hive Metastore
          │           └─→ PostgreSQL (Metadata DB)
          │
-         └─────────→ Memgraph (Graph Database)
+         └─────────→ Neo4j (Graph Database)
                      • Data lineage tracking
                      • Pipeline visualization
                      • Knowledge graph
@@ -52,12 +52,12 @@ Technology Stack:
 - **Hive Metastore 3.1.3**: Centralized table metadata management
 - **MinIO**: S3-compatible object storage for data lake
 - **PostgreSQL**: Backend for Hive Metastore and Airflow
-- **Memgraph**: Graph database for data lineage and knowledge graphs
+- **Neo4j**: Graph database for data lineage and knowledge graphs
 - **Jupyter Notebooks**: Interactive development and table creation
 - **Full S3A protocol support**: Direct reads/writes to MinIO
 - **Partitioned tables**: Optimized for performance and cost
-- **Automated Data Lineage**: Real-time lineage tracking for all Spark jobs with Memgraph integration
-- **Knowledge Graph**: Automatic DAG visualization, Spark job tracking, and resource analysis with Memgraph
+- **Automated Data Lineage**: Real-time lineage tracking for all Spark jobs with Neo4j integration
+- **Knowledge Graph**: Automatic DAG visualization, Spark job tracking, and resource analysis with Neo4j
 
 ## Quick Start
 
@@ -121,7 +121,7 @@ Open Jupyter and run the notebooks in order:
 | MinIO API | http://localhost:9000 | admin / admin123 |
 | Hive Metastore | thrift://localhost:9083 | - |
 | PostgreSQL | localhost:5432 | hive / hive123 |
-| Memgraph Lab | http://localhost:3000 | - (if running) |
+| Neo4j Browser | http://localhost:7474 | neo4j / neo4j123 |
 
 ## Data Layer Structure
 
@@ -217,7 +217,7 @@ The gold layer contains business-level aggregates optimized for reporting and an
 │   ├── bronze_to_silver_*.py             # Silver layer transformations (6 jobs)
 │   ├── gold_*.py                         # Gold layer analytics (9 jobs)
 │   ├── validate_bronze_data.py           # Bronze data validation
-│   └── lineage_listener.py               # Automatic lineage tracking to Memgraph
+│   └── lineage_listener.py               # Automatic lineage tracking to Neo4j
 ├── notebooks/
 │   ├── create_bronze_tables.ipynb  # Create bronze layer tables
 │   ├── create_silver_tables.ipynb  # Create silver layer tables
@@ -236,11 +236,11 @@ The gold layer contains business-level aggregates optimized for reporting and an
 
 ## Data Lineage & Knowledge Graph
 
-The project includes comprehensive data lineage tracking and knowledge graph capabilities powered by Memgraph.
+The project includes comprehensive data lineage tracking and knowledge graph capabilities powered by Neo4j.
 
 ### Automated Spark Data Lineage
 
-**All Spark jobs automatically track and push data lineage to Memgraph** using the `lineage_listener` module. This captures:
+**All Spark jobs automatically track and push data lineage to Neo4j** using the `lineage_listener` module. This captures:
 
 - **Source datasets**: Tables and files read during job execution
 - **Destination datasets**: Tables and files written during job execution
@@ -259,17 +259,17 @@ The project includes comprehensive data lineage tracking and knowledge graph cap
    - DataFrame writes (`saveAsTable`, `insertInto`, `save`)
    - SQL queries (INSERT INTO, FROM, JOIN clauses)
 
-3. Lineage is pushed to Memgraph in real-time creating:
+3. Lineage is pushed to Neo4j in real-time creating:
    - `(:Dataset)` nodes for tables and files
    - `(:SparkJob)` nodes for each Spark application
    - `(Dataset)-[:FLOWS_TO]->(SparkJob)-[:WRITES_TO]->(Dataset)` relationships
 
 **Configuration:**
 Control lineage tracking with environment variables:
-- `LINEAGE_TO_MEMGRAPH=true` (default: enabled)
-- `MEMGRAPH_URI=bolt://memgraph:7687` (default)
-- `MEMGRAPH_USER=""` (optional)
-- `MEMGRAPH_PASSWORD=""` (optional)
+- `LINEAGE_TO_NEO4J=true` (default: enabled)
+- `NEO4J_URI=bolt://neo4j:7687` (default)
+- `NEO4J_USER=neo4j` (default)
+- `NEO4J_PASSWORD=neo4j123` (default)
 - `LINEAGE_DEBUG=true` (default: enabled, prints lineage events)
 
 **View Lineage:**
@@ -285,13 +285,13 @@ RETURN path;
 
 ### DAG Knowledge Graph
 
-The project also includes automated knowledge graph generation that extracts DAG metadata and loads it into Memgraph for visualization and analysis.
+The project also includes automated knowledge graph generation that extracts DAG metadata and loads it into Neo4j for visualization and analysis.
 
 **Features:**
 
 - **Automatic DAG Discovery**: Extracts all DAGs, tasks, and dependencies from Airflow
 - **AST Parsing**: Analyzes DAG Python files to understand task relationships
-- **Graph Database**: Stores pipeline metadata in Memgraph for querying and visualization
+- **Graph Database**: Stores pipeline metadata in Neo4j for querying and visualization
 - **Comprehensive Spark Job Tracking**: 
   - Application paths and configurations
   - Resource allocation (memory, cores, executors)
@@ -315,20 +315,20 @@ The project also includes automated knowledge graph generation that extracts DAG
    # Should return: {"status": "healthy", ...}
    ```
 
-3. **Start Memgraph** (optional - for visualization):
-   ```bash
-   docker run -d --name memgraph -p 7687:7687 -p 3000:3000 memgraph/memgraph-platform
-   ```
+3. **Start Neo4j** (optional - for visualization):
+```bash
+docker run -d --name neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/neo4j123 neo4j:5
+```
 
 4. **Generate Knowledge Graph**:
    ```bash
    python create-kb/parse-airflow.py
    ```
 
-5. **Visualize** (open Memgraph Lab):
-   ```
-   http://localhost:3000
-   ```
+5. **Visualize** (open Neo4j Browser):
+```
+http://localhost:7474
+```
 
    Example query:
    ```cypher

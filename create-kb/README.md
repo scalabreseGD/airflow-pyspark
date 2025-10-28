@@ -1,10 +1,10 @@
 # Airflow DAG Knowledge Graph
 
-This module extracts DAG metadata from Apache Airflow and loads it into Memgraph to create a knowledge graph of your data pipeline architecture.
+This module extracts DAG metadata from Apache Airflow and loads it into Neo4j to create a knowledge graph of your data pipeline architecture.
 
 ## Overview
 
-The `parse-airflow.py` script connects to your Airflow instance via REST API, parses DAG Python files to extract tasks and dependencies, and loads the data directly into Memgraph for visualization and analysis.
+The `parse-airflow.py` script connects to your Airflow instance via REST API, parses DAG Python files to extract tasks and dependencies, and loads the data directly into Neo4j for visualization and analysis.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ The `parse-airflow.py` script connects to your Airflow instance via REST API, pa
 │       ↓                                                  │
 │  Extract Tasks, Dependencies & Spark Configurations      │
 │       ↓                                                  │
-│  Memgraph (Graph Database)                               │
+│  Neo4j (Graph Database)                                  │
 │    • DAG nodes                                           │
 │    • Task nodes                                          │
 │    • SparkJob nodes (with resource & dependency info)    │
@@ -34,7 +34,7 @@ The `parse-airflow.py` script connects to your Airflow instance via REST API, pa
 
 - **REST API Integration**: Fetches DAG information from Airflow API
 - **AST Parsing**: Analyzes Python DAG files to extract task definitions and dependencies
-- **Graph Database Storage**: Loads data directly into Memgraph (no intermediate JSON files)
+- **Graph Database Storage**: Loads data directly into Neo4j (no intermediate JSON files)
 - **Relationship Tracking**: Captures task dependencies, DAG triggers, and Spark job mappings
 - **Spark Job Detection**: Identifies SparkSubmitOperator tasks and extracts comprehensive job configuration
 - **Dependency Analysis**: Tracks Spark job dependencies (packages, jars, py_files) for environment analysis
@@ -66,7 +66,7 @@ curl http://localhost:8082/api/v1/dag_code/health
 
 ### 2. Install Neo4j Driver
 
-The script uses the Neo4j driver to connect to Memgraph:
+The script uses the Neo4j driver to connect to Neo4j:
 
 ```bash
 # Using pip
@@ -76,21 +76,22 @@ pip install neo4j
 poetry add neo4j
 ```
 
-### 3. Start Memgraph
+### 3. Start Neo4j
 
-You can run Memgraph using Docker:
+You can run Neo4j using Docker:
 
 ```bash
 docker run -d \
-  --name memgraph \
+  --name neo4j \
+  -p 7474:7474 \
   -p 7687:7687 \
-  -p 3000:3000 \
-  memgraph/memgraph-platform
+  -e NEO4J_AUTH=neo4j/neo4j123 \
+  neo4j:6
 ```
 
 **Ports:**
 - `7687`: Bolt protocol (for database connections)
-- `3000`: Memgraph Lab UI (for visualization)
+- `7474`: Neo4j Browser (for visualization)
 
 ### 4. Verify Airflow is Running
 
@@ -117,9 +118,9 @@ AIRFLOW_API = "http://localhost:8082/api/v1"
 USERNAME = "admin"
 PASSWORD = "admin"
 
-# Memgraph configuration
-MEMGRAPH_URI = "bolt://localhost:7687"
-MEMGRAPH_AUTH = ("", "")  # Empty for no authentication
+# Neo4j configuration
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_AUTH = ("neo4j", "neo4j123")
 
 # Spark operator detection
 SPARK_OPERATOR_NAMES = {
@@ -145,7 +146,7 @@ SPARK_JOB_PARAMS = {
 
 ### Basic Usage
 
-Run the script to extract DAGs and load into Memgraph:
+Run the script to extract DAGs and load into Neo4j:
 
 ```bash
 python create-kb/parse-airflow.py
@@ -172,12 +173,12 @@ python create-kb/parse-airflow.py
     - Downstream: ['verify_ingestion']
 
 ============================================================
-📊 MEMGRAPH INTEGRATION
+📊 NEO4J INTEGRATION
 ============================================================
-✅ Connected to Memgraph at bolt://localhost:7687
-🗑️  Cleared existing data from Memgraph
+✅ Connected to Neo4j at bolt://localhost:7687
+🗑️  Cleared existing data from Neo4j
 
-📊 Loading 22 tasks from 3 DAGs into Memgraph...
+📊 Loading 22 tasks from 3 DAGs into Neo4j...
    ✅ Created 3 DAG nodes
    ✅ Created 22 Task nodes
    ✅ Created 16 SparkJob nodes
@@ -185,8 +186,8 @@ python create-kb/parse-airflow.py
    ✅ Created 1 TRIGGERS relationships
    ✅ Created indexes
 
-🎉 Successfully loaded data into Memgraph!
-   📍 Access Memgraph Lab at: http://localhost:3000
+🎉 Successfully loaded data into Neo4j!
+   📍 Open Neo4j Browser at: http://localhost:7474
    💡 Example queries:
       - View DAGs and Tasks: MATCH (d:DAG)-[:CONTAINS]->(t:Task) RETURN d, t LIMIT 25
       - View Spark Jobs: MATCH (t:Task)-[:EXECUTES]->(sj:SparkJob) RETURN t, sj LIMIT 25
@@ -294,11 +295,11 @@ The SparkJob nodes provide deep insights into your Spark applications:
 
 ## Querying the Knowledge Graph
 
-### Access Memgraph Lab
+### Open Neo4j Browser
 
 Open your browser and navigate to:
 ```
-http://localhost:3000
+http://localhost:7474
 ```
 
 ### Example Queries
@@ -422,8 +423,8 @@ The refactored code follows a clean object-oriented design:
 - `_extract_bitshift_dependencies()`: Handle >> and << operators
 - `_extract_method_dependencies()`: Handle set_upstream/set_downstream
 
-**MemgraphClient** - Manages Memgraph database operations
-- `connect()`: Establish connection to Memgraph
+**Neo4jClient** - Manages Neo4j database operations
+- `connect()`: Establish connection to Neo4j
 - `clear_all()`: Clear existing graph data
 - `load_tasks()`: Load tasks into graph
 - `_create_dag_nodes()`: Create DAG nodes
@@ -475,14 +476,14 @@ The AST parser can detect:
 pip install neo4j
 ```
 
-### Cannot Connect to Memgraph
+### Cannot Connect to Neo4j
 
 ```bash
-# Check if Memgraph is running
-docker ps | grep memgraph
+# Check if Neo4j is running
+docker ps | grep neo4j
 
-# Check Memgraph logs
-docker logs memgraph
+# Check Neo4j logs
+docker logs neo4j
 
 # Verify port is accessible
 nc -zv localhost 7687
@@ -540,7 +541,7 @@ Generate automatic documentation of your data pipeline architecture without main
 Understand which downstream tasks are affected when you modify a specific task or DAG.
 
 ### 3. Dependency Visualization
-Visualize complex task dependencies across multiple DAGs using Memgraph Lab's graph visualization.
+Visualize complex task dependencies across multiple DAGs using Neo4j Browser's graph visualization.
 
 ### 4. Spark Job Inventory
 Maintain a comprehensive inventory of all Spark jobs across your pipeline with their configurations, dependencies, and resource requirements.
@@ -595,7 +596,7 @@ jobs:
         run: python create-kb/parse-airflow.py
         env:
           AIRFLOW_API: ${{ secrets.AIRFLOW_URL }}
-          MEMGRAPH_URI: ${{ secrets.MEMGRAPH_URI }}
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
 ```
 
 ## Future Enhancements
@@ -717,6 +718,6 @@ if not fileloc.startswith('/opt/airflow/dags/production/'):
 
 - [Main Project README](../README.md) - Overall project documentation
 - [Airflow Integration Guide](../README_AIRFLOW_SPARK.md) - Airflow + Spark setup
-- [Memgraph Documentation](https://memgraph.com/docs) - Memgraph query language
+- [Neo4j Documentation](https://neo4j.com/docs/) - Cypher query language
 - [Airflow REST API](https://airflow.apache.org/docs/apache-airflow/stable/stable-rest-api-ref.html) - Airflow API reference
 - [Airflow Plugins](https://airflow.apache.org/docs/apache-airflow/stable/authoring-and-scheduling/plugins.html) - How to write Airflow plugins

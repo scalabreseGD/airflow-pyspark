@@ -12,19 +12,19 @@ except Exception:
 from pyspark.sql import SparkSession, DataFrameReader, DataFrameWriter
 
 
-class MemgraphClient:
+class Neo4jClient:
     def __init__(self, uri: str, user: Optional[str], password: Optional[str]) -> None:
         if _Neo4jDriver is None:
-            raise ImportError("neo4j driver not installed; disable LINEAGE_TO_MEMGRAPH or install neo4j package")
+            raise ImportError("neo4j driver not installed; set LINEAGE_TO_NEO4J=false or install neo4j package")
         auth = (user, password)
         self._driver = _Neo4jDriver.driver(uri, auth=auth)
-        _dbg(f"MemgraphClient initialized. URI={uri}, auth={'basic' if auth else 'none'}")
+        _dbg(f"Neo4jClient initialized. URI={uri}, auth={'basic' if auth else 'none'}")
         try:
             with self._driver.session() as s:
                 s.run("RETURN 1").consume()
-            _dbg("Memgraph bolt connection OK")
+            _dbg("Neo4j bolt connection OK")
         except Exception as e:
-            _dbg(f"Memgraph connectivity test failed: {e}")
+            _dbg(f"Neo4j connectivity test failed: {e}")
 
     def close(self) -> None:
         self._driver.close()
@@ -66,11 +66,11 @@ class MemgraphClient:
                     _dbg(f"Creating read-only edges for {len(src_list)} sources")
                     session.run(cypher_edges_readonly, sources=src_list, job=job_name)
         except Exception as e:
-            _dbg(f"ERROR writing lineage to Memgraph: {e}")
+            _dbg(f"ERROR writing lineage to Neo4j: {e}")
 
 
 class _LineageTracker:
-    def __init__(self, job_name: str, client: MemgraphClient | None) -> None:
+    def __init__(self, job_name: str, client: Neo4jClient | None) -> None:
         self.job_name = job_name
         self.client = client
         self.sources: Set[str] = set()
@@ -83,7 +83,7 @@ class _LineageTracker:
 
     def emit(self, destinations: List[str]) -> None:
         if not self.client:
-            _dbg("Skipping emit: no Memgraph client (init failed or disabled)")
+            _dbg("Skipping emit: no Neo4j client (init failed or disabled)")
             return
         try:
             _dbg(f"Emitting lineage: sources={list(self.sources)}, destinations={destinations}")
@@ -94,19 +94,19 @@ class _LineageTracker:
 
 
 def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
-    enabled = os.getenv("LINEAGE_TO_MEMGRAPH", "true").lower() in ("1", "true", "yes")
+    enabled = os.getenv("LINEAGE_TO_NEO4J", "true").lower() in ("1", "true", "yes")
     if not enabled:
-        _dbg("Lineage disabled via LINEAGE_TO_MEMGRAPH env var")
+        _dbg("Lineage disabled via LINEAGE_TO_NEO4J env var")
         return
 
-    uri = os.getenv("MEMGRAPH_URI", "bolt://memgraph:7687")
-    user = os.getenv("MEMGRAPH_USER", "")
-    password = os.getenv("MEMGRAPH_PASSWORD", "")
+    uri = os.getenv("NEO4J_URI", os.getenv("NEO4J_URI", "bolt://neo4j:7687"))
+    user = os.getenv("NEO4J_USER", os.getenv("NEO4J_USER", "neo4j"))
+    password = os.getenv("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", "neo4j123"))
 
     try:
-        client = MemgraphClient(uri, user, password)
+        client = Neo4jClient(uri, user, password)
     except Exception as e:
-        _dbg(f"Memgraph client init failed: {e}")
+        _dbg(f"Neo4j client init failed: {e}")
         client = None
 
     app_name = spark.sparkContext.appName or "spark-job"

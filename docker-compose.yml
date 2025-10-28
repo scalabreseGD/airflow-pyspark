@@ -124,6 +124,8 @@ services:
 
   # Spark Master with custom image including all dependencies
   spark-master:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
+    image: spark-with-jars:3.5.3
     build:
       context: ./docker/spark
       dockerfile: Dockerfile
@@ -158,6 +160,8 @@ services:
 
   # Spark Worker
   spark-worker:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
+    image: spark-with-jars:3.5.3
     build:
       context: ./docker/spark
       dockerfile: Dockerfile
@@ -191,6 +195,7 @@ services:
 
   # Jupyter Notebook with PySpark
   jupyter:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
     build:
       context: ./docker/jupyter
       dockerfile: Dockerfile
@@ -219,6 +224,7 @@ services:
 
   # Airflow Init - Initialize Airflow database
   airflow-init:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
     build:
       context: ./docker/airflow
       dockerfile: Dockerfile
@@ -252,6 +258,7 @@ services:
 
   # Airflow Webserver
   airflow-webserver:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
     image: airflow-pyspark:2.7.0
     container_name: airflow-webserver
     depends_on:
@@ -285,6 +292,7 @@ services:
 
   # Airflow Scheduler
   airflow-scheduler:
+    platform: ${DEFAULT_PLATFORM:-linux/amd64}
     image: airflow-pyspark:2.7.0
     container_name: airflow-scheduler
     depends_on:
@@ -312,27 +320,18 @@ services:
       retries: 5
     restart: always
 
-  # Memgraph - Graph database for storing DAG and task relationships
-  memgraph:
-    image: memgraph/memgraph-mage:latest
-    container_name: memgraph
+  # Neo4j - Graph database (replacing Memgraph)
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
     ports:
-      - "7687:7687"
-      - "7444:7444"
-    command: [ "--log-level=TRACE" ]
-    networks:
-      - spark-network
-
-  memgraph-lab:
-    image: memgraph/lab:latest
-    container_name: memgraph-lab
-    ports:
-      - "3000:3000"
-    depends_on:
-      - memgraph
+      - "7474:7474"   # Browser/HTTP
+      - "7687:7687"   # Bolt
     environment:
-      - QUICK_CONNECT_MG_HOST=memgraph
-      - QUICK_CONNECT_MG_PORT=7687
+      - NEO4J_AUTH=neo4j/neo4j123
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - ./volumes/neo4j:/data
     networks:
       - spark-network
 

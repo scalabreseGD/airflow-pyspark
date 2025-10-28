@@ -36,7 +36,7 @@ if app_name is None:
 builder = SparkSession.builder.enableHiveSupport()
 spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
-# Register lineage listener to push sources/destinations to Memgraph
+# Register lineage listener to push sources/destinations to Neo4j
 try:
     from lineage_listener import register_lineage_listener
 

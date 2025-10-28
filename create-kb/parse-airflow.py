@@ -1,7 +1,7 @@
 """
-Airflow DAG Parser and Memgraph Knowledge Base Builder
+Airflow DAG Parser and Neo4j Knowledge Base Builder
 
-This script extracts DAG metadata from Airflow's REST API and loads it into Memgraph
+This script extracts DAG metadata from Airflow's REST API and loads it into Neo4j
 as a graph database for analysis.
 
 Graph Structure:
@@ -46,8 +46,8 @@ AIRFLOW_API = "http://localhost:8082/api/v1"
 USERNAME = "admin"
 PASSWORD = "admin"
 
-MEMGRAPH_URI = "bolt://localhost:7687"
-MEMGRAPH_AUTH = ("", "")
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_AUTH = ("neo4j", "neo4j123")
 
 SPARK_OPERATOR_NAMES = {
     "SparkSubmitOperator",
@@ -400,10 +400,10 @@ def collect_airflow_tasks(client: AirflowClient) -> List[Dict]:
 
 
 # --------------------------------------------------
-# MEMGRAPH CLIENT
+# NEO4J CLIENT
 # --------------------------------------------------
-class MemgraphClient:
-    """Client for interacting with Memgraph graph database."""
+class Neo4jClient:
+    """Client for interacting with Neo4j graph database."""
 
     def __init__(self, uri: str, auth: tuple[str, str]):
         self.uri = uri
@@ -411,7 +411,7 @@ class MemgraphClient:
         self.driver = None
 
     def connect(self) -> bool:
-        """Connect to Memgraph and verify connectivity."""
+        """Connect to Neo4j and verify connectivity."""
         if not NEO4J_AVAILABLE:
             print("⚠️ Neo4j driver not available. Skipping graph database integration.")
             return False
@@ -419,25 +419,25 @@ class MemgraphClient:
         try:
             self.driver = GraphDatabase.driver(uri=self.uri, auth=self.auth)
             self.driver.verify_connectivity()
-            print(f"✅ Connected to Memgraph at {self.uri}")
+            print(f"✅ Connected to Neo4j at {self.uri}")
             return True
         except Exception as e:
-            print(f"⚠️ Failed to connect to Memgraph: {e}")
+            print(f"⚠️ Failed to connect to Neo4j: {e}")
             return False
 
     def clear_all(self):
-        """Clear all existing data from Memgraph."""
+        """Clear all existing data from Neo4j."""
         if not self.driver:
             return
 
         try:
-            self.driver.execute_query("MATCH (n) DETACH DELETE n;", database_="memgraph")
-            print("🗑️  Cleared existing data from Memgraph")
+            self.driver.execute_query("MATCH (n) DETACH DELETE n;", database_="neo4j")
+            print("🗑️  Cleared existing data from Neo4j")
         except Exception as e:
-            print(f"⚠️ Failed to clear Memgraph: {e}")
+            print(f"⚠️ Failed to clear Neo4j: {e}")
 
     def load_tasks(self, tasks: List[Dict]):
-        """Load DAG tasks and dependencies into Memgraph."""
+        """Load DAG tasks and dependencies into Neo4j."""
         if not self.driver:
             return
 
@@ -450,7 +450,7 @@ class MemgraphClient:
                     dags_map[dag_id] = []
                 dags_map[dag_id].append(task)
 
-            print(f"\n📊 Loading {len(tasks)} tasks from {len(dags_map)} DAGs into Memgraph...")
+            print(f"\n📊 Loading {len(tasks)} tasks from {len(dags_map)} DAGs into Neo4j...")
 
             # Create DAG nodes
             self._create_dag_nodes(dags_map)
@@ -470,8 +470,8 @@ class MemgraphClient:
             # Create indexes
             self._create_indexes()
 
-            print(f"\n🎉 Successfully loaded data into Memgraph!")
-            print(f"   📍 Access Memgraph Lab at: http://localhost:3000")
+            print(f"\n🎉 Successfully loaded data into Neo4j!")
+            print(f"   📍 Open Neo4j Browser at: http://localhost:7474")
             print(f"\n   💡 Example Analysis Queries:")
             print(f"      - View all pipelines with resources:")
             print(f"        MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:EXECUTES]->(sj:SparkJob)")
@@ -493,12 +493,12 @@ class MemgraphClient:
             print(f"        RETURN sj.application, sj.packages, sj.py_files, sj.jars")
 
         except Exception as e:
-            print(f"⚠️ Error loading data to Memgraph: {e}")
+            print(f"⚠️ Error loading data to Neo4j: {e}")
             import traceback
             traceback.print_exc()
 
     def _create_dag_nodes(self, dags_map: Dict[str, List[Dict]]):
-        """Create DAG nodes in Memgraph."""
+        """Create DAG nodes in Neo4j."""
         for dag_id, tasks in dags_map.items():
             spark_count = sum(1 for t in tasks if t.get("is_spark_task"))
 
@@ -514,7 +514,7 @@ class MemgraphClient:
                 dag_id=dag_id,
                 total_tasks=len(tasks),
                 spark_tasks=spark_count,
-                database_="memgraph"
+                database_="neo4j"
             )
 
         print(f"   ✅ Created {len(dags_map)} DAG nodes")
@@ -543,7 +543,7 @@ class MemgraphClient:
                 is_spark_task=task["is_spark_task"],
                 spark_job=task.get("spark_job"),
                 params=params_json,
-                database_="memgraph"
+                database_="neo4j"
             )
 
         print(f"   ✅ Created {len(tasks)} Task nodes")
@@ -609,7 +609,7 @@ class MemgraphClient:
                 application_args=application_args,
                 env_vars=env_vars,
                 conf=conf,
-                database_="memgraph"
+                database_="neo4j"
             )
 
             # Create relationship between Task and SparkJob
@@ -624,7 +624,7 @@ class MemgraphClient:
                 task_id=task["task_id"],
                 dag_id=task["dag_id"],
                 job_id=job_id,
-                database_="memgraph"
+                database_="neo4j"
             )
 
         if spark_tasks:
@@ -648,7 +648,7 @@ class MemgraphClient:
                     dag_id=dag_id,
                     upstream_task_id=upstream_task_id,
                     downstream_task_id=task_id,
-                    database_="memgraph"
+                    database_="neo4j"
                 )
                 dep_count += 1
 
@@ -667,7 +667,7 @@ class MemgraphClient:
                 self.driver.execute_query(
                     "MERGE (d:DAG {dag_id: $target_dag_id})",
                     target_dag_id=target_dag_id,
-                    database_="memgraph"
+                    database_="neo4j"
                 )
 
                 # Create TRIGGERS relationship
@@ -681,7 +681,7 @@ class MemgraphClient:
                     source_dag_id=source_dag_id,
                     source_task_id=source_task_id,
                     target_dag_id=target_dag_id,
-                    database_="memgraph"
+                    database_="neo4j"
                 )
                 trigger_count += 1
 
@@ -691,17 +691,17 @@ class MemgraphClient:
     def _create_indexes(self):
         """Create indexes for better query performance."""
         try:
-            self.driver.execute_query("CREATE INDEX ON :DAG(dag_id);", database_="memgraph")
-            self.driver.execute_query("CREATE INDEX ON :Task(task_id);", database_="memgraph")
-            self.driver.execute_query("CREATE INDEX ON :Task(dag_id);", database_="memgraph")
-            self.driver.execute_query("CREATE INDEX ON :SparkJob(job_id);", database_="memgraph")
+            self.driver.execute_query("CREATE INDEX ON :DAG(dag_id);", database_="neo4j")
+            self.driver.execute_query("CREATE INDEX ON :Task(task_id);", database_="neo4j")
+            self.driver.execute_query("CREATE INDEX ON :Task(dag_id);", database_="neo4j")
+            self.driver.execute_query("CREATE INDEX ON :SparkJob(job_id);", database_="neo4j")
             print("   ✅ Created indexes")
         except Exception:
             # Indexes might already exist
             pass
 
     def close(self):
-        """Close the connection to Memgraph."""
+        """Close the connection to Neo4j."""
         if self.driver:
             self.driver.close()
 
@@ -710,7 +710,7 @@ class MemgraphClient:
 # MAIN ENTRYPOINT
 # --------------------------------------------------
 def main():
-    """Main workflow: Extract DAG data from Airflow and load into Memgraph."""
+    """Main workflow: Extract DAG data from Airflow and load into Neo4j."""
 
     # 1. Connect to Airflow and collect tasks
     print("🚀 Extracting Airflow DAG tasks and dependencies...\n")
@@ -775,16 +775,16 @@ def main():
             if task.get("downstream"):
                 print(f"    - Downstream: {task['downstream']}")
 
-    # 3. Load into Memgraph
+    # 3. Load into Neo4j
     print("\n" + "=" * 60)
-    print("📊 MEMGRAPH INTEGRATION")
+    print("📊 NEO4J INTEGRATION")
     print("=" * 60)
 
-    memgraph = MemgraphClient(MEMGRAPH_URI, MEMGRAPH_AUTH)
-    if memgraph.connect():
-        memgraph.clear_all()
-        memgraph.load_tasks(tasks)
-        memgraph.close()
+    neo4j_client = Neo4jClient(NEO4J_URI, NEO4J_AUTH)
+    if neo4j_client.connect():
+        neo4j_client.clear_all()
+        neo4j_client.load_tasks(tasks)
+        neo4j_client.close()
 
 
 if __name__ == "__main__":
