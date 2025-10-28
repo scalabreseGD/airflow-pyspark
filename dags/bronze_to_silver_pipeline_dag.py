@@ -134,7 +134,7 @@ start_pipeline_task = PythonOperator(
     dag=dag,
 )
 
-# Task 3: Validate bronze data (fail if any table is empty)
+# Task 3: Validate bronze data and create silver data
 validate_bronze_data = SparkSubmitOperator(
     task_id='validate_bronze_data',
     application='/opt/spark-apps/validate_bronze_data.py',
@@ -142,6 +142,16 @@ validate_bronze_data = SparkSubmitOperator(
     conf=spark_silver_conf,
     verbose=True,
     name='ValidateBronzeData',
+    dag=dag,
+)
+
+create_silver_data = SparkSubmitOperator(
+    task_id='create_silver_data',
+    application='/opt/spark-apps/create_silver_tables.py',
+    conn_id='spark_default',
+    conf=spark_silver_conf,
+    verbose=True,
+    name='CreateSilverData',
     dag=dag,
 )
 
@@ -221,11 +231,15 @@ complete_pipeline_task = PythonOperator(
 
 # Define task dependencies
 # Pipeline flow: start -> bronze ingestion -> validate bronze -> silver transformations (parallel) -> complete
-start_pipeline_task >> validate_bronze_data >> [
+transformation = [
     transform_transactions_to_silver,
     transform_transaction_items_to_silver,
     transform_subscriptions_to_silver,
     transform_product_catalog_to_silver,
     transform_inventory_snapshots_to_silver,
     transform_customer_interactions_to_silver
-] >> complete_pipeline_task
+]
+start_pipeline_task >> [validate_bronze_data, create_silver_data]
+validate_bronze_data >> transformation
+create_silver_data >> transformation
+transformation >> complete_pipeline_task

@@ -141,6 +141,17 @@ start_pipeline_task = PythonOperator(
     dag=dag,
 )
 
+# Task 1.5: Create Gold Data
+create_gold_tables = SparkSubmitOperator(
+    task_id='create_gold_tables',
+    application='/opt/spark-apps/create_gold_tables.py',
+    conn_id='spark_default',
+    conf=spark_gold_conf,
+    verbose=True,
+    name='CreateGoldTables',
+    dag=dag,
+)
+
 # Task 2: Transform to gold.product_performance
 transform_product_performance = SparkSubmitOperator(
     task_id='transform_product_performance',
@@ -250,7 +261,7 @@ complete_pipeline_task = PythonOperator(
 
 # Define task dependencies
 # Pipeline flow: start -> gold transformations (parallel with concurrency 3) -> complete
-start_pipeline_task >> [
+start_pipeline_task >> create_gold_tables >> [
     transform_product_performance,
     transform_customer_360,
     transform_store_performance,

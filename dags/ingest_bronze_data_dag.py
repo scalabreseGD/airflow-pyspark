@@ -41,28 +41,30 @@ dag = DAG(
 )
 
 
-def check_prerequisites(**context):
-    """
-    Check if prerequisites are met before running the Spark job.
-    This can be expanded to verify tables exist, check data availability, etc.
-    """
+bronze_configs = {
+    # Hive Metastore Configuration - CRITICAL for finding tables!
+    'spark.sql.hive.metastore.version': '3.1.3',
+    'spark.sql.catalogImplementation': 'hive',
+    'spark.hadoop.hive.metastore.uris': 'thrift://hive-metastore:9083',
+    'spark.sql.warehouse.dir': 's3a://warehouse/',
+    # S3A / MinIO Configuration
+    'spark.hadoop.fs.s3a.endpoint': 'http://minio:9000',
+    'spark.hadoop.fs.s3a.access.key': 'admin',
+    'spark.hadoop.fs.s3a.secret.key': 'admin123',
+    'spark.hadoop.fs.s3a.path.style.access': 'true',
+    'spark.hadoop.fs.s3a.impl': 'org.apache.hadoop.fs.s3a.S3AFileSystem',
+    'spark.hadoop.fs.s3a.connection.ssl.enabled': 'false',
+    'spark.hadoop.fs.s3a.aws.credentials.provider': 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider',
+}
 
-    print("Checking prerequisites for bronze data ingestion...")
-
-    # In a production setup, you might want to check:
-    # - Bronze tables exist
-    # - Source data files are available
-    # - Spark cluster is healthy
-
-    print("✓ Prerequisites check passed")
-    return True
-
-
-# Task 1: Check prerequisites (optional but recommended)
-check_prerequisites_task = PythonOperator(
-    task_id='check_prerequisites',
-    python_callable=check_prerequisites,
-    provide_context=True,
+# Task 1: Create bronze
+create_bronze_data = SparkSubmitOperator(
+    task_id='create_bronze_data',
+    application='/opt/spark-apps/create_bronze_tables.py',
+    conn_id='spark_default',
+    conf=bronze_configs,
+    verbose=True,
+    name='CreateBronzeData',
     dag=dag,
 )
 
@@ -71,25 +73,11 @@ ingest_bronze_data = SparkSubmitOperator(
     task_id='ingest_bronze_data',
     application='/opt/spark-apps/ingest_bronze_data.py',
     conn_id='spark_default',
-    conf={
-        # Hive Metastore Configuration - CRITICAL for finding tables!
-        'spark.sql.hive.metastore.version': '3.1.3',
-        'spark.sql.catalogImplementation': 'hive',
-        'spark.hadoop.hive.metastore.uris': 'thrift://hive-metastore:9083',
-        'spark.sql.warehouse.dir': 's3a://warehouse/',
-        # S3A / MinIO Configuration
-        'spark.hadoop.fs.s3a.endpoint': 'http://minio:9000',
-        'spark.hadoop.fs.s3a.access.key': 'admin',
-        'spark.hadoop.fs.s3a.secret.key': 'admin123',
-        'spark.hadoop.fs.s3a.path.style.access': 'true',
-        'spark.hadoop.fs.s3a.impl': 'org.apache.hadoop.fs.s3a.S3AFileSystem',
-        'spark.hadoop.fs.s3a.connection.ssl.enabled': 'false',
-        'spark.hadoop.fs.s3a.aws.credentials.provider': 'org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider',
-    },
+    conf=bronze_configs,
     verbose=True,
     name='IngestBronzeData',
     dag=dag,
 )
 
 # Define task dependencies
-check_prerequisites_task >> ingest_bronze_data
+create_bronze_data >> ingest_bronze_data
