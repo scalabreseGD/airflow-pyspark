@@ -46,6 +46,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -299,13 +300,13 @@ try:
 
     print("  ✓ Applied all attribution models")
 
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.channel_attribution").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
     # Write to gold layer
     print("\n[5/6] Writing to gold.channel_attribution...")
-    final_df.write \
-        .mode("overwrite") \
-        .partitionBy("attribution_date") \
-        .format("parquet") \
-        .saveAsTable("gold.channel_attribution")
+    final_df.write.insertInto("gold.channel_attribution", overwrite=True)
 
     final_count = final_df.count()
     print(f"  ✓ Successfully wrote {final_count:,} attributed transactions")

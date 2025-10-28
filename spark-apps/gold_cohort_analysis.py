@@ -46,6 +46,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -252,14 +253,13 @@ try:
     )
 
     print("  ✓ Finalized cohort metrics")
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.cohort_analysis").select('col_name').collect()]
 
+    final_df = final_df.select([final_df[col] for col in cols])
     # Write to gold layer
     print("\n[7/7] Writing to gold.cohort_analysis...")
-    final_df.write \
-        .mode("overwrite") \
-        .partitionBy("cohort_month") \
-        .format("parquet") \
-        .saveAsTable("gold.cohort_analysis")
+    final_df.write.insertInto("gold.cohort_analysis", overwrite=True)
 
     final_count = final_df.count()
     print(f"  ✓ Successfully wrote {final_count:,} cohort period records")

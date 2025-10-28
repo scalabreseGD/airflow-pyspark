@@ -779,25 +779,323 @@ Gold Layer (Business Analytics)
 - [Spark Configuration](https://spark.apache.org/docs/latest/configuration.html)
 - [Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture)
 
-## Lineage to Memgraph (experimental)
+## Automated Data Lineage with Memgraph
 
-Spark apps can push simple lineage (sources -> job -> destinations) to Memgraph.
+All Spark jobs in this project automatically track and push data lineage to Memgraph using the `lineage_listener` module.
 
-- Configure via environment variables:
-  - `LINEAGE_TO_MEMGRAPH=true` (default true)
-  - `MEMGRAPH_URI` (default `bolt://memgraph:7687`)
-  - `MEMGRAPH_USER` (default `neo4j`)
-  - `MEMGRAPH_PASSWORD` (default `neo4j`)
+### Overview
 
-- Rebuild Spark image to include Python dependency:
+The lineage tracking system captures complete data flows across all Spark jobs:
+- **Source datasets**: All tables and files read during job execution
+- **Destination datasets**: All tables and files written during job execution
+- **Job relationships**: Automatic graph creation showing bronze → silver → gold flows
 
-```bash
-docker-compose build spark-master spark-worker
-docker-compose up -d spark-master spark-worker memgraph memgraph-lab
+### How It Works
+
+#### 1. Integration in Spark Jobs
+
+Every Spark job includes the lineage listener:
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("MyJob") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# Register lineage listener (automatically tracks all subsequent operations)
+try:
+    from lineage_listener import register_lineage_listener
+    register_lineage_listener(spark)
+except Exception as e:
+    print(f"Warning: Could not enable lineage tracking: {e}")
+
+# All subsequent reads/writes are automatically tracked
+spark.sql("USE bronze")
+df = spark.table("transactions_raw")  # ✓ Tracked as source
+
+# Transform data...
+result_df = df.filter(df.status == "completed")
+
+# Write to silver
+result_df.write.mode("overwrite").insertInto("silver.transactions")  # ✓ Tracked as destination
 ```
 
-- The listener is registered inside Spark apps after `SparkSession` creation. Nodes:
-  - `(:Dataset {name})`, `(:Job {name})`
-  - Relationships: `(Dataset)-[:FLOWS_TO]->(Job)-[:WRITES_TO]->(Dataset)`
+#### 2. What Gets Tracked
 
-- View in Memgraph Lab at `http://localhost:3000`.
+The listener automatically captures:
+
+**Read Operations:**
+- `spark.table("database.table")` - Hive table reads
+- `spark.read.parquet("s3a://path")` - File reads (Parquet, CSV, JSON, ORC, text)
+- `spark.sql("SELECT * FROM bronze.transactions")` - SQL FROM/JOIN clauses
+
+**Write Operations:**
+- `df.write.saveAsTable("silver.table")` - Save as Hive table
+- `df.write.insertInto("silver.table")` - Insert into existing table
+- `df.write.parquet("s3a://path")` - Write to files
+- `spark.sql("INSERT INTO silver.table SELECT ...")` - SQL inserts
+
+#### 3. Graph Structure
+
+The lineage creates a knowledge graph in Memgraph:
+
+**Nodes:**
+- `(:Dataset {name: "bronze.transactions_raw"})` - Tables and file paths
+- `(:SparkJob {name: "BronzeToSilverTransactions"})` - Spark applications
+
+**Relationships:**
+- `(Dataset)-[:FLOWS_TO]->(SparkJob)` - Data read by job
+- `(SparkJob)-[:WRITES_TO]->(Dataset)` - Data written by job
+
+**Example Graph:**
+```
+(s3a://data/source_data/transactions.csv)
+    -[:FLOWS_TO]->
+(IngestBronzeData)
+    -[:WRITES_TO]->
+(bronze.transactions_raw)
+    -[:FLOWS_TO]->
+(BronzeToSilverTransactions)
+    -[:WRITES_TO]->
+(silver.transactions)
+    -[:FLOWS_TO]->
+(GoldCustomer360)
+    -[:WRITES_TO]->
+(gold.customer_360)
+```
+
+### Configuration
+
+Control lineage tracking via environment variables (set in `docker-compose.yml`):
+
+```yaml
+environment:
+  # Enable/disable lineage tracking
+  LINEAGE_TO_MEMGRAPH: "true"  # default: true
+  
+  # Memgraph connection
+  MEMGRAPH_URI: "bolt://memgraph:7687"  # default
+  MEMGRAPH_USER: ""  # optional (default: no auth)
+  MEMGRAPH_PASSWORD: ""  # optional
+  
+  # Debug logging
+  LINEAGE_DEBUG: "true"  # default: true (prints lineage events to logs)
+```
+
+To **disable** lineage tracking for a specific job:
+```python
+import os
+os.environ["LINEAGE_TO_MEMGRAPH"] = "false"
+
+# Then create SparkSession...
+```
+
+### Setup
+
+#### 1. Start Memgraph Services
+
+```bash
+# Start Memgraph and Memgraph Lab
+docker-compose up -d memgraph memgraph-lab
+
+# Verify Memgraph is running
+docker-compose ps memgraph
+```
+
+#### 2. Ensure Spark Images Have Neo4j Driver
+
+The `neo4j` Python package is required for bolt protocol:
+
+```dockerfile
+# In docker/spark/Dockerfile (already included)
+RUN pip install neo4j
+```
+
+Rebuild if needed:
+```bash
+docker-compose build spark-master spark-worker
+docker-compose up -d spark-master spark-worker
+```
+
+#### 3. Run Your Spark Jobs
+
+Lineage is automatically tracked when jobs run:
+
+```bash
+# Via Airflow (recommended)
+# Open http://localhost:8082 and trigger any DAG
+
+# Or direct submission
+./submit.sh ingest_bronze_data.py
+```
+
+### Viewing Lineage
+
+#### Access Memgraph Lab
+
+Open: **http://localhost:3000**
+
+#### Query Examples
+
+**1. View All Data Flows:**
+```cypher
+MATCH (src:Dataset)-[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO]->(dst:Dataset)
+RETURN src, job, dst;
+```
+
+**2. Trace Upstream Lineage (where does data come from?):**
+```cypher
+// Find all sources that flow into gold.customer_360
+MATCH path = (source:Dataset)-[:FLOWS_TO*1..10]->(job:SparkJob)
+      -[:WRITES_TO]->(target:Dataset {name: "gold.customer_360"})
+RETURN path;
+```
+
+**3. Trace Downstream Lineage (where does data go?):**
+```cypher
+// Find all tables created from bronze.transactions_raw
+MATCH path = (source:Dataset {name: "bronze.transactions_raw"})
+      -[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO*1..10]->(target:Dataset)
+RETURN path;
+```
+
+**4. Find Jobs Reading a Specific Table:**
+```cypher
+MATCH (dataset:Dataset {name: "silver.transactions"})-[:FLOWS_TO]->(job:SparkJob)
+RETURN dataset, job;
+```
+
+**5. Find Jobs Writing to a Specific Table:**
+```cypher
+MATCH (job:SparkJob)-[:WRITES_TO]->(dataset:Dataset {name: "silver.transactions"})
+RETURN job, dataset;
+```
+
+**6. Complete Pipeline View (Bronze → Silver → Gold):**
+```cypher
+MATCH path = (bronze:Dataset)-[:FLOWS_TO]->(j1:SparkJob)-[:WRITES_TO]->
+             (silver:Dataset)-[:FLOWS_TO]->(j2:SparkJob)-[:WRITES_TO]->(gold:Dataset)
+WHERE bronze.name STARTS WITH "bronze." 
+  AND silver.name STARTS WITH "silver."
+  AND gold.name STARTS WITH "gold."
+RETURN path
+LIMIT 20;
+```
+
+**7. Impact Analysis (what breaks if I change this table?):**
+```cypher
+// Find all downstream dependencies
+MATCH path = (changed:Dataset {name: "silver.transactions"})
+      -[:FLOWS_TO*1..5]->(affected)
+RETURN DISTINCT affected.name AS affected_assets
+ORDER BY affected_assets;
+```
+
+### Use Cases
+
+#### 1. Debugging Pipeline Issues
+
+```cypher
+// Find which job writes to a problematic table
+MATCH (job:SparkJob)-[:WRITES_TO]->(dataset:Dataset {name: "silver.transactions"})
+RETURN job.name, dataset.name;
+```
+
+#### 2. Impact Analysis
+
+```cypher
+// Before modifying bronze.transactions_raw, see what depends on it
+MATCH path = (source:Dataset {name: "bronze.transactions_raw"})
+      -[:FLOWS_TO*1..10]->(downstream)
+RETURN DISTINCT downstream.name AS affected_tables;
+```
+
+#### 3. Data Provenance & Compliance
+
+```cypher
+// Document complete lineage for audit
+MATCH path = (source)-[:FLOWS_TO*..10]->(target:Dataset {name: "gold.customer_360"})
+RETURN path;
+```
+
+#### 4. Pipeline Optimization
+
+```cypher
+// Find tables read by multiple jobs (candidates for caching)
+MATCH (dataset:Dataset)-[:FLOWS_TO]->(job:SparkJob)
+WITH dataset, COUNT(DISTINCT job) AS job_count
+WHERE job_count > 1
+RETURN dataset.name AS frequently_read_table, job_count
+ORDER BY job_count DESC;
+```
+
+### Troubleshooting
+
+#### Lineage Not Appearing
+
+**Check if lineage is enabled:**
+```bash
+docker-compose logs spark-worker | grep LINEAGE
+# Should see: [LINEAGE] Enabling lineage for app: ...
+```
+
+**Verify Memgraph connection:**
+```bash
+# Check Memgraph is running
+docker-compose ps memgraph
+
+# Test connection
+docker exec -it spark-master python3 -c "
+from neo4j import GraphDatabase
+driver = GraphDatabase.driver('bolt://memgraph:7687', auth=('', ''))
+with driver.session() as s:
+    result = s.run('RETURN 1')
+    print('Connected:', result.single()[0])
+driver.close()
+"
+```
+
+**Check Spark job logs:**
+```bash
+docker-compose logs spark-master | grep -A 5 "lineage"
+docker-compose logs spark-worker | grep -A 5 "lineage"
+```
+
+#### Neo4j Driver Not Found
+
+```bash
+# Rebuild Spark images with neo4j package
+docker-compose build spark-master spark-worker
+docker-compose up -d spark-master spark-worker
+```
+
+#### Clear Existing Lineage
+
+```cypher
+// Delete all lineage data
+MATCH (n) DETACH DELETE n;
+```
+
+### Best Practices
+
+1. **Keep Lineage Enabled**: The overhead is minimal and the insights are valuable
+2. **Use Meaningful Job Names**: Set descriptive `appName` when creating SparkSession
+3. **Query Regularly**: Review lineage after pipeline changes
+4. **Document Complex Flows**: Add comments to jobs explaining business logic
+5. **Combine with DAG Knowledge Graph**: Use `create-kb/parse-airflow.py` to see both DAG structure and data lineage
+
+### Integration with DAG Knowledge Graph
+
+This lineage tracking complements the DAG knowledge graph created by `create-kb/parse-airflow.py`:
+
+- **DAG Graph**: Shows Airflow task orchestration and Spark job configurations
+- **Lineage Graph**: Shows actual data flows between datasets
+
+Together they provide:
+- **What runs when**: DAG scheduling and dependencies
+- **What reads/writes what**: Data lineage and transformations
+- **How it runs**: Resource allocation and configurations
+
+See [create-kb/README.md](create-kb/README.md) for DAG knowledge graph documentation.

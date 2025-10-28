@@ -39,6 +39,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -173,7 +174,8 @@ try:
         lit(0).cast("DECIMAL(12,2)").alias("revenue_last_90d"),
         lit(0).alias("orders_last_365d"),
         lit(0).cast("DECIMAL(12,2)").alias("revenue_last_365d"),
-        col("unique_products_365d").alias("unique_products_purchased_365d"), "unique_categories_365d",
+        col("unique_products_365d").alias("unique_products_purchased_365d"),
+        col("unique_categories_365d").alias("unique_categories_purchased_365d"),
         lit("online").alias("primary_channel"),
         lit(0.5).cast("DECIMAL(3,2)").alias("channel_diversity_score"),
         col("online_order_percentage").cast("DECIMAL(5,2)"),
@@ -216,9 +218,13 @@ try:
 
     print("  ✓ Customer 360 profiles created")
 
-    # Write
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.customer_360").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
+    # Write to gold layer
     print("\n[4/4] Writing to gold.customer_360...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable("gold.customer_360")
+    final_df.write.insertInto("gold.customer_360", overwrite=True)
 
     print(f"  ✓ Wrote {final_df.count():,} profiles")
     print("\n" + "=" * 80)

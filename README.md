@@ -29,13 +29,19 @@ Technology Stack:
          ├─────────→ Apache Spark (ETL Processing)
          │           • Master + Worker nodes
          │           • PySpark for transformations
+         │           • Automatic lineage tracking
          │
          ├─────────→ MinIO (S3-compatible storage)
          │           • s3a://warehouse/ (Hive tables)
          │           • s3a://data/ (Source data & staging)
          │
-         └─────────→ Hive Metastore
-                     └─→ PostgreSQL (Metadata DB)
+         ├─────────→ Hive Metastore
+         │           └─→ PostgreSQL (Metadata DB)
+         │
+         └─────────→ Memgraph (Graph Database)
+                     • Data lineage tracking
+                     • Pipeline visualization
+                     • Knowledge graph
 ```
 
 ## Features
@@ -46,9 +52,11 @@ Technology Stack:
 - **Hive Metastore 3.1.3**: Centralized table metadata management
 - **MinIO**: S3-compatible object storage for data lake
 - **PostgreSQL**: Backend for Hive Metastore and Airflow
+- **Memgraph**: Graph database for data lineage and knowledge graphs
 - **Jupyter Notebooks**: Interactive development and table creation
 - **Full S3A protocol support**: Direct reads/writes to MinIO
 - **Partitioned tables**: Optimized for performance and cost
+- **Automated Data Lineage**: Real-time lineage tracking for all Spark jobs with Memgraph integration
 - **Knowledge Graph**: Automatic DAG visualization, Spark job tracking, and resource analysis with Memgraph
 
 ## Quick Start
@@ -208,7 +216,8 @@ The gold layer contains business-level aggregates optimized for reporting and an
 │   ├── ingest_bronze_data.py             # Bronze layer ingestion
 │   ├── bronze_to_silver_*.py             # Silver layer transformations (6 jobs)
 │   ├── gold_*.py                         # Gold layer analytics (9 jobs)
-│   └── validate_bronze_data.py           # Bronze data validation
+│   ├── validate_bronze_data.py           # Bronze data validation
+│   └── lineage_listener.py               # Automatic lineage tracking to Memgraph
 ├── notebooks/
 │   ├── create_bronze_tables.ipynb  # Create bronze layer tables
 │   ├── create_silver_tables.ipynb  # Create silver layer tables
@@ -225,11 +234,60 @@ The gold layer contains business-level aggregates optimized for reporting and an
     └── dag_code.py                 # Custom Airflow plugin for DAG code extraction
 ```
 
-## DAG Knowledge Graph
+## Data Lineage & Knowledge Graph
 
-The project includes automated knowledge graph generation that extracts DAG metadata and loads it into Memgraph for visualization and analysis.
+The project includes comprehensive data lineage tracking and knowledge graph capabilities powered by Memgraph.
 
-### Features
+### Automated Spark Data Lineage
+
+**All Spark jobs automatically track and push data lineage to Memgraph** using the `lineage_listener` module. This captures:
+
+- **Source datasets**: Tables and files read during job execution
+- **Destination datasets**: Tables and files written during job execution
+- **Job relationships**: Automatic graph creation showing data flows
+
+**How it works:**
+1. Each Spark job imports and registers the lineage listener after creating SparkSession:
+   ```python
+   from lineage_listener import register_lineage_listener
+   register_lineage_listener(spark)
+   ```
+
+2. The listener automatically tracks:
+   - `spark.table()` reads
+   - DataFrame reads (CSV, Parquet, JSON, etc.)
+   - DataFrame writes (`saveAsTable`, `insertInto`, `save`)
+   - SQL queries (INSERT INTO, FROM, JOIN clauses)
+
+3. Lineage is pushed to Memgraph in real-time creating:
+   - `(:Dataset)` nodes for tables and files
+   - `(:SparkJob)` nodes for each Spark application
+   - `(Dataset)-[:FLOWS_TO]->(SparkJob)-[:WRITES_TO]->(Dataset)` relationships
+
+**Configuration:**
+Control lineage tracking with environment variables:
+- `LINEAGE_TO_MEMGRAPH=true` (default: enabled)
+- `MEMGRAPH_URI=bolt://memgraph:7687` (default)
+- `MEMGRAPH_USER=""` (optional)
+- `MEMGRAPH_PASSWORD=""` (optional)
+- `LINEAGE_DEBUG=true` (default: enabled, prints lineage events)
+
+**View Lineage:**
+```cypher
+// See all data flows
+MATCH (src:Dataset)-[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO]->(dst:Dataset)
+RETURN src, job, dst;
+
+// Trace lineage for a specific table
+MATCH path = (src:Dataset)-[:FLOWS_TO*..5]->(:SparkJob)-[:WRITES_TO]->(target:Dataset {name: "gold.customer_360"})
+RETURN path;
+```
+
+### DAG Knowledge Graph
+
+The project also includes automated knowledge graph generation that extracts DAG metadata and loads it into Memgraph for visualization and analysis.
+
+**Features:**
 
 - **Automatic DAG Discovery**: Extracts all DAGs, tasks, and dependencies from Airflow
 - **AST Parsing**: Analyzes DAG Python files to understand task relationships
@@ -280,6 +338,7 @@ The project includes automated knowledge graph generation that extracts DAG meta
 
 ### What It Captures
 
+**From DAG parsing:**
 - **DAG nodes** with task counts and Spark job metrics
 - **Task nodes** with operator types, parameters, and relationships
 - **SparkJob nodes** with comprehensive configuration:
@@ -289,14 +348,26 @@ The project includes automated knowledge graph generation that extracts DAG meta
   - Application paths and arguments
 - **Dependency relationships** (>>, <<, set_upstream/downstream)
 - **Trigger relationships** (TriggerDagRunOperator)
-- Complete data lineage through bronze → silver → gold
+
+**From Spark lineage tracking:**
+- **Dataset nodes** for all tables and files (bronze, silver, gold layers)
+- **SparkJob nodes** for each Spark application execution
+- **Data flow relationships** showing reads and writes
+- Complete end-to-end lineage: source files → bronze → silver → gold
 
 ### Analysis Capabilities
 
+**Pipeline Analysis:**
 - **Resource Optimization**: Identify over/under-provisioned Spark jobs
 - **Dependency Tracking**: See which jobs use Kafka, Delta Lake, or other libraries
 - **Configuration Analysis**: Compare resource allocations across similar jobs
 - **Impact Analysis**: Understand downstream effects of changes
+
+**Lineage Analysis:**
+- **Data Provenance**: Trace where data comes from and where it goes
+- **Impact Analysis**: Find all downstream tables affected by a source change
+- **Debugging**: Identify which jobs produce or consume specific datasets
+- **Compliance**: Document complete data flows for auditing
 
 See [create-kb/README.md](create-kb/README.md) for detailed documentation, examples, and query recipes.
 

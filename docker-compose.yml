@@ -315,7 +315,7 @@ services:
   # Memgraph - Graph database for storing DAG and task relationships
   memgraph:
     image: memgraph/memgraph-mage:latest
-    container_name: memgraph-mage
+    container_name: memgraph
     ports:
       - "7687:7687"
       - "7444:7444"

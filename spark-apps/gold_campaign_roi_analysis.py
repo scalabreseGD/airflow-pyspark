@@ -45,6 +45,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -262,13 +263,13 @@ try:
         "created_timestamp"
     )
 
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.campaign_roi_analysis").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
     # Write to gold layer
     print("\n[6/6] Writing to gold.campaign_roi_analysis...")
-    final_df.write \
-        .mode("overwrite") \
-        .partitionBy("analysis_date") \
-        .format("parquet") \
-        .saveAsTable("gold.campaign_roi_analysis")
+    final_df.write.insertInto("gold.campaign_roi_analysis", overwrite=True)
 
     final_count = final_df.count()
     print(f"  ✓ Successfully wrote {final_count:,} campaign records")

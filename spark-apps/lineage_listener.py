@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import atexit
 import os
 import re
 from typing import List, Set, Optional
-import atexit
 
 try:
     from neo4j import GraphDatabase as _Neo4jDriver
@@ -16,7 +16,7 @@ class MemgraphClient:
     def __init__(self, uri: str, user: Optional[str], password: Optional[str]) -> None:
         if _Neo4jDriver is None:
             raise ImportError("neo4j driver not installed; disable LINEAGE_TO_MEMGRAPH or install neo4j package")
-        auth = (user, password) if (user and password) else None
+        auth = (user, password)
         self._driver = _Neo4jDriver.driver(uri, auth=auth)
         _dbg(f"MemgraphClient initialized. URI={uri}, auth={'basic' if auth else 'none'}")
         try:
@@ -31,10 +31,8 @@ class MemgraphClient:
 
     def upsert_lineage(self, job_name: str, sources: List[str], destinations: List[str]) -> None:
         _dbg(f"Upsert lineage: job={job_name}, sources={len(sources)}, destinations={len(destinations)}")
-        cypher_nodes = (
-            "UNWIND $sources AS s MERGE (:Dataset {name: s}); "
-            "UNWIND $destinations AS d MERGE (:Dataset {name: d})"
-        )
+        cypher_sources = "UNWIND $sources AS s MERGE (:Dataset {name: s})"
+        cypher_destinations = "UNWIND $destinations AS d MERGE (:Dataset {name: d})"
         cypher_edges_write = (
             "MERGE (j:SparkJob {name: $job}) "
             "WITH j "
@@ -51,15 +49,22 @@ class MemgraphClient:
         )
         try:
             with self._driver.session() as session:
-                session.run(cypher_nodes, sources=list(set(sources or [])), destinations=list(set(destinations or [])))
-                if destinations:
-                    pairs = [{"source": s, "dest": d} for s in set(sources or []) for d in set(destinations or [])]
+                src_list = list(set(sources or []))
+                dst_list = list(set(destinations or []))
+                if src_list:
+                    _dbg(f"Merging {len(src_list)} source Dataset nodes")
+                    session.run(cypher_sources, sources=src_list)
+                if dst_list:
+                    _dbg(f"Merging {len(dst_list)} destination Dataset nodes")
+                    session.run(cypher_destinations, destinations=dst_list)
+                if dst_list:
+                    pairs = [{"source": s, "dest": d} for s in set(src_list) for d in set(dst_list)]
                     if pairs:
                         _dbg(f"Creating write edges for {len(pairs)} source-dest pairs")
                         session.run(cypher_edges_write, pairs=pairs, job=job_name)
-                elif sources:
-                    _dbg(f"Creating read-only edges for {len(set(sources))} sources")
-                    session.run(cypher_edges_readonly, sources=list(set(sources)), job=job_name)
+                elif src_list:
+                    _dbg(f"Creating read-only edges for {len(src_list)} sources")
+                    session.run(cypher_edges_readonly, sources=src_list, job=job_name)
         except Exception as e:
             _dbg(f"ERROR writing lineage to Memgraph: {e}")
 

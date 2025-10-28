@@ -30,6 +30,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -94,8 +95,13 @@ try:
 
     # Write to gold
     print("\nWriting to gold.subscription_health...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable(
-        "gold.subscription_health")
+
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.subscription_health").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
+    # Write to gold layer
+    final_df.write.insertInto("gold.subscription_health", overwrite=True)
 
     print(f"\n✓ Successfully created subscription health for {final_df.count():,} plans")
     print("\n" + "=" * 80)

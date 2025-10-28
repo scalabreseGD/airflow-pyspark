@@ -18,6 +18,7 @@ A complete, production-ready data lakehouse implementing the **Medallion Archite
 - **MinIO**: S3-compatible object storage
 - **Jupyter**: Interactive development
 - **PostgreSQL**: Backend for metadata
+- **Memgraph**: Data lineage and knowledge graph
 
 ## Getting Started
 
@@ -38,6 +39,7 @@ A complete, production-ready data lakehouse implementing the **Medallion Archite
 - Jupyter: http://localhost:8888 (token in logs)
 - Spark Master: http://localhost:8080
 - MinIO Console: http://localhost:9001 (admin / admin123)
+- Memgraph Lab: http://localhost:3000 (data lineage visualization)
 
 ### Step 2: Configure Airflow
 
@@ -445,11 +447,73 @@ docker-compose restart jupyter
 6. **Use Hive tables**: Manage metadata through Hive Metastore
 7. **Document transformations**: Add comments to Spark jobs
 
+## Viewing Data Lineage (Optional but Recommended)
+
+All Spark jobs automatically track data lineage and push it to Memgraph. This lets you visualize how data flows through your pipeline.
+
+### Start Memgraph
+
+```bash
+docker-compose up -d memgraph memgraph-lab
+```
+
+### View Lineage
+
+1. Open **Memgraph Lab**: http://localhost:3000
+2. Run queries to explore your data flows:
+
+**See all data flows:**
+```cypher
+MATCH (src:Dataset)-[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO]->(dst:Dataset)
+RETURN src, job, dst;
+```
+
+**Complete pipeline view (Bronze → Silver → Gold):**
+```cypher
+MATCH path = (bronze:Dataset)-[:FLOWS_TO]->(j1:SparkJob)-[:WRITES_TO]->
+             (silver:Dataset)-[:FLOWS_TO]->(j2:SparkJob)-[:WRITES_TO]->(gold:Dataset)
+WHERE bronze.name STARTS WITH "bronze." 
+  AND silver.name STARTS WITH "silver."
+  AND gold.name STARTS WITH "gold."
+RETURN path
+LIMIT 20;
+```
+
+**Find what depends on a table (impact analysis):**
+```cypher
+MATCH path = (source:Dataset {name: "bronze.transactions_raw"})
+      -[:FLOWS_TO*1..10]->(downstream)
+RETURN DISTINCT downstream.name AS affected_tables;
+```
+
+### How It Works
+
+Every Spark job includes this code after creating the SparkSession:
+
+```python
+from lineage_listener import register_lineage_listener
+register_lineage_listener(spark)
+```
+
+This automatically tracks:
+- All tables and files read by the job
+- All tables and files written by the job
+- Creates a graph showing complete data flows
+
+**Configuration:**
+Lineage tracking is enabled by default. To disable it, set:
+```bash
+export LINEAGE_TO_MEMGRAPH=false
+```
+
+See [README_AIRFLOW_SPARK.md](README_AIRFLOW_SPARK.md#automated-data-lineage-with-memgraph) for detailed lineage documentation.
+
 ## Getting Help
 
 - **Airflow UI**: http://localhost:8082 - View DAG runs and logs
 - **Spark UI**: http://localhost:8080 - Monitor Spark jobs
 - **MinIO Console**: http://localhost:9001 - Browse data files
+- **Memgraph Lab**: http://localhost:3000 - View data lineage (if Memgraph is running)
 - **Logs**: `docker-compose logs -f <service>`
 
 ## Ready to Go!
@@ -460,5 +524,6 @@ You're all set! You now have:
 - Empty silver and gold layers ready for your transformations
 - Airflow orchestrating workflows
 - Jupyter for development
+- Automatic data lineage tracking to Memgraph
 
 Start building your silver and gold transformations and create a complete ETL pipeline!

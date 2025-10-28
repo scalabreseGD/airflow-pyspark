@@ -44,6 +44,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -228,11 +229,12 @@ try:
     print("\n[6/6] Writing to silver.subscriptions...")
     print("  Partitioning by: status, is_current")
 
-    final_df.write \
-        .mode("overwrite") \
-        .partitionBy("status", "is_current") \
-        .format("parquet") \
-        .saveAsTable("silver.subscriptions")
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN silver.subscriptions").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
+
+    final_df.write.insertInto("silver.subscriptions", overwrite=True)
 
     print(f"  ✓ Successfully wrote {final_count:,} records to silver.subscriptions")
 

@@ -2,6 +2,7 @@ FROM apache/airflow:2.7.0
 
 # Install Spark provider first as airflow user
 RUN pip install --no-cache-dir apache-airflow-providers-apache-spark==4.1.3
+RUN pip install --no-cache-dir neo4j
 
 USER root
 

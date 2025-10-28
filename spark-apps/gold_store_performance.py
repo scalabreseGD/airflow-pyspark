@@ -31,6 +31,7 @@ spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCr
 # Register lineage listener to push sources/destinations to Memgraph
 try:
     from lineage_listener import register_lineage_listener
+
     register_lineage_listener(spark)
 except Exception as e:
     raise e
@@ -87,8 +88,12 @@ try:
 
     # Write to gold
     print("\nWriting to gold.store_performance...")
-    final_df.write.mode("overwrite").partitionBy("analysis_date").format("parquet").saveAsTable(
-        "gold.store_performance")
+    cols = [col.col_name for col in
+            spark.sql(f"SHOW COLUMNS IN gold.store_performance").select('col_name').collect()]
+
+    final_df = final_df.select([final_df[col] for col in cols])
+    # Write to gold layer
+    final_df.write.insertInto("gold.store_performance", overwrite=True)
 
     print(f"\n✓ Successfully created store performance for {final_df.count():,} stores")
     print("\n" + "=" * 80)
