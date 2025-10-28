@@ -11,10 +11,20 @@ ENV POSTGRES_JDBC_VERSION=42.7.3
 # Install curl
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Backup and remove old Hadoop, then install Hadoop 3.3.4
+# Configure Hadoop download sources (CDN + fallbacks)
+ARG HADOOP_MIRROR_PRIMARY=https://dlcdn.apache.org/hadoop/common
+ARG HADOOP_MIRROR_FALLBACK=https://downloads.apache.org/hadoop/common
+ARG HADOOP_ARCHIVE=https://archive.apache.org/dist/hadoop/common
+
+# Backup and remove old Hadoop, then install Hadoop with mirror/CDN fallbacks (no closer.lua to avoid HTML)
 RUN mv /opt/hadoop /opt/hadoop-old && \
     cd /opt && \
-    curl -L -O https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz && \
+    ( \
+      curl -fSL --retry 5 --retry-delay 2 -o hadoop-${HADOOP_VERSION}.tar.gz ${HADOOP_MIRROR_PRIMARY}/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz \
+      || curl -fSL --retry 5 --retry-delay 2 -o hadoop-${HADOOP_VERSION}.tar.gz ${HADOOP_MIRROR_FALLBACK}/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz \
+      || curl -fSL --retry 5 --retry-delay 2 -o hadoop-${HADOOP_VERSION}.tar.gz ${HADOOP_ARCHIVE}/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz \
+    ) && \
+    tar tzf hadoop-${HADOOP_VERSION}.tar.gz >/dev/null && \
     tar xzf hadoop-${HADOOP_VERSION}.tar.gz && \
     mv hadoop-${HADOOP_VERSION} hadoop && \
     rm hadoop-${HADOOP_VERSION}.tar.gz && \
@@ -24,12 +34,13 @@ RUN mv /opt/hadoop /opt/hadoop-old && \
 ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
-# Download AWS SDK, Hadoop AWS, and updated PostgreSQL JDBC driver to Hive lib
+# Download AWS SDK, Hadoop AWS, and updated PostgreSQL JDBC driver to Hive lib via Maven CDN
+ARG MAVEN_BASE=https://repo.maven.apache.org/maven2
 RUN cd /opt/hive/lib && \
-    curl -L -O https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
-    curl -L -O https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar && \
+    curl -fSL -O ${MAVEN_BASE}/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
+    curl -fSL -O ${MAVEN_BASE}/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar && \
     rm -f postgresql-*.jar && \
-    curl -L -O https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar && \
+    curl -fSL -O ${MAVEN_BASE}/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar && \
     echo "Downloaded AWS JARs and updated PostgreSQL JDBC driver"
 
 # Copy JARs to Hadoop lib directory

@@ -25,17 +25,29 @@ ENV PATH="${JAVA_HOME}/bin:${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
 ENV SPARK_MASTER_PORT="7077"
 ENV SPARK_MASTER_HOST="spark-master"
 
-# Download and install Spark 3.5.3 with proper extraction
-RUN mkdir -p ${SPARK_HOME} && \
-    curl -L https://archive.apache.org/dist/spark/spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz -o spark-3.5.3-bin-hadoop3.tgz && \
-    tar xzf spark-3.5.3-bin-hadoop3.tgz --directory ${SPARK_HOME} --strip-components 1 && \
-    rm -rf spark-3.5.3-bin-hadoop3.tgz
+# Configure Spark download sources (CDN + fallbacks)
+ARG SPARK_VERSION=3.5.3
+ARG SPARK_MIRROR_PRIMARY=https://dlcdn.apache.org/spark
+ARG SPARK_MIRROR_FALLBACK=https://downloads.apache.org/spark
+ARG SPARK_ARCHIVE=https://archive.apache.org/dist/spark
 
-# Download additional JARs for S3/MinIO support
-RUN curl -L -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar \
-    https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    curl -L -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.12.262.jar \
-    https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
+# Download and install Spark with mirror/CDN fallbacks (no closer.lua to avoid HTML)
+RUN mkdir -p ${SPARK_HOME} && \
+    ( \
+      curl -fSL --retry 5 --retry-delay 2 -o /tmp/spark.tgz ${SPARK_MIRROR_PRIMARY}/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
+      || curl -fSL --retry 5 --retry-delay 2 -o /tmp/spark.tgz ${SPARK_MIRROR_FALLBACK}/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
+      || curl -fSL --retry 5 --retry-delay 2 -o /tmp/spark.tgz ${SPARK_ARCHIVE}/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
+    ) && \
+    tar tzf /tmp/spark.tgz >/dev/null && \
+    tar xzf /tmp/spark.tgz --directory ${SPARK_HOME} --strip-components 1 && \
+    rm -f /tmp/spark.tgz
+
+# Download additional JARs for S3/MinIO support via CDN-backed Maven
+ARG MAVEN_BASE=https://repo.maven.apache.org/maven2
+RUN curl -fSL -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar \
+      ${MAVEN_BASE}/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
+    curl -fSL -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.12.262.jar \
+      ${MAVEN_BASE}/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar
 
 # Copy Spark configuration
 COPY ./spark-defaults.conf "${SPARK_HOME}/conf/spark-defaults.conf"
