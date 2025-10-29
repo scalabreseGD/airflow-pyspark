@@ -491,8 +491,8 @@ RETURN DISTINCT downstream.name AS affected_tables;
 Every Spark job includes this code after creating the SparkSession:
 
 ```python
-from lineage_listener import register_lineage_listener
-register_lineage_listener(spark)
+from neo4j_lineage import enable
+enable(spark)
 ```
 
 This automatically tracks:

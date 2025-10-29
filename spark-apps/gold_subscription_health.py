@@ -28,12 +28,8 @@ builder = SparkSession.builder.enableHiveSupport()
 spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 # Register lineage listener to push sources/destinations to Neo4j
-try:
-    from lineage_listener import register_lineage_listener
-
-    register_lineage_listener(spark)
-except Exception as e:
-    raise e
+from neo4j_lineage import enable
+enable(spark)
 
 try:
     # Read subscriptions
