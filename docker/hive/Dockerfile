@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1.6
 
+ARG SPARK_VERSION=3.5.3
 ARG HADOOP_VERSION=3.3.4
 ARG AWS_SDK_VERSION=1.12.367
 ARG POSTGRES_JDBC_VERSION=42.7.3
+
+FROM spark-with-jars:${SPARK_VERSION} AS spark-jars
 
 FROM apache/hive:3.1.3
 
@@ -23,15 +26,15 @@ RUN mv /opt/hadoop /opt/hadoop-old && \
 ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
-# Add AWS and JDBC jars with versioned names for stable caching
-ARG AWS_SDK_VERSION
-ARG POSTGRES_JDBC_VERSION
-RUN cd /opt/hive/lib && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar && \
-    rm -f postgresql-*.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar && \
-    cp /opt/hive/lib/hadoop-aws-${HADOOP_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
+# Reuse JARs already present in spark-with-jars image to avoid re-downloading
+ARG SPARK_VERSION
+COPY --from=spark-jars /opt/spark/jars/hadoop-aws-${HADOOP_VERSION}.jar /opt/hive/lib/
+COPY --from=spark-jars /opt/spark/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar /opt/hive/lib/
+COPY --from=spark-jars /opt/spark/jars/postgresql-${POSTGRES_JDBC_VERSION}.jar /opt/hive/lib/
+# Base Hive image already includes Hive and Thrift libs; avoid duplicating to prevent conflicts
+
+# Also copy to Hadoop common lib where needed
+RUN cp /opt/hive/lib/hadoop-aws-${HADOOP_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
     cp /opt/hive/lib/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
     cp /opt/hive/lib/postgresql-${POSTGRES_JDBC_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/
 
