@@ -29,8 +29,8 @@ class Neo4jClient:
     def close(self) -> None:
         self._driver.close()
 
-    def upsert_lineage(self, job_name: str, sources: List[str], destinations: List[str]) -> None:
-        _dbg(f"Upsert lineage: job={job_name}, sources={len(sources)}, destinations={len(destinations)}")
+    def upsert_lineage(self, job_name: str, sources: List[str], destinations: List[str], cte_lineage: Optional[dict] = None) -> None:
+        _dbg(f"Upsert lineage: job={job_name}, sources={len(sources)}, destinations={len(destinations)}, ctes={len(cte_lineage or {})}")
         cypher_sources = "UNWIND $sources AS s MERGE (:Dataset {name: s})"
         cypher_destinations = "UNWIND $destinations AS d MERGE (:Dataset {name: d})"
         cypher_edges_write = (
@@ -48,6 +48,31 @@ class Neo4jClient:
             "MATCH (s:Dataset {name: sname}) "
             "MERGE (s)-[:FLOWS_TO]->(j)"
         )
+        # CTE lineage: create CTE nodes and relationships
+        cypher_cte_nodes = "UNWIND $ctes AS c MERGE (:CTE {name: c.name, job: $job})"
+        cypher_cte_edges = (
+            "UNWIND $ctes AS c "
+            "MATCH (cte:CTE {name: c.name, job: $job}) "
+            "WITH cte, c.sources AS src_names "
+            "UNWIND src_names AS src "
+            "MATCH (s:Dataset {name: src}) "
+            "MERGE (s)-[:FLOWS_TO]->(cte)"
+        )
+        cypher_cte_to_cte = (
+            "UNWIND $ctes AS c "
+            "MATCH (target_cte:CTE {name: c.name, job: $job}) "
+            "WITH target_cte, c.cte_deps AS dep_names "
+            "UNWIND dep_names AS dep "
+            "MATCH (source_cte:CTE {name: dep, job: $job}) "
+            "MERGE (source_cte)-[:FLOWS_TO]->(target_cte)"
+        )
+        cypher_cte_to_job = (
+            "MERGE (j:SparkJob {name: $job}) "
+            "WITH j "
+            "UNWIND $cte_names AS cname "
+            "MATCH (cte:CTE {name: cname, job: $job}) "
+            "MERGE (cte)-[:FLOWS_TO]->(j)"
+        )
         try:
             with self._driver.session() as session:
                 src_list = list(set(sources or []))
@@ -58,6 +83,37 @@ class Neo4jClient:
                 if dst_list:
                     _dbg(f"Merging {len(dst_list)} destination Dataset nodes")
                     session.run(cypher_destinations, destinations=dst_list)
+
+                # Handle CTE lineage
+                if cte_lineage:
+                    # Separate table sources from CTE dependencies
+                    all_cte_names = set(cte_lineage.keys())
+                    cte_list = []
+                    for name, srcs in cte_lineage.items():
+                        table_srcs = [s for s in srcs if s not in all_cte_names]
+                        cte_deps = [s for s in srcs if s in all_cte_names]
+                        cte_list.append({
+                            "name": name,
+                            "sources": table_srcs,
+                            "cte_deps": cte_deps
+                        })
+
+                    _dbg(f"Creating {len(cte_list)} CTE nodes")
+                    session.run(cypher_cte_nodes, ctes=cte_list, job=job_name)
+
+                    # Create edges from tables to CTEs
+                    _dbg(f"Creating CTE source edges")
+                    session.run(cypher_cte_edges, ctes=cte_list, job=job_name)
+
+                    # Create edges from CTEs to other CTEs
+                    cte_with_deps = [c for c in cte_list if c["cte_deps"]]
+                    if cte_with_deps:
+                        _dbg(f"Creating CTE-to-CTE edges")
+                        session.run(cypher_cte_to_cte, ctes=cte_with_deps, job=job_name)
+
+                    _dbg(f"Creating CTE to job edges")
+                    session.run(cypher_cte_to_job, cte_names=list(cte_lineage.keys()), job=job_name)
+
                 if dst_list:
                     pairs = [{"source": s, "dest": d} for s in set(src_list) for d in set(dst_list)]
                     if pairs:
@@ -75,6 +131,7 @@ class _LineageTracker:
         self.job_name = job_name
         self.client = client
         self.sources: Set[str] = set()
+        self.cte_lineage: dict = {}
 
     def add_source(self, name: str) -> None:
         if not name:
@@ -82,16 +139,74 @@ class _LineageTracker:
         self.sources.add(name)
         _dbg(f"Source added: {name}")
 
+    def add_cte_lineage(self, cte_name: str, sources: Set[str]) -> None:
+        if not cte_name:
+            return
+        self.cte_lineage[cte_name] = sources
+        _dbg(f"CTE lineage added: {cte_name} -> {sources}")
+
     def emit(self, destinations: List[str]) -> None:
         if not self.client:
             _dbg("Skipping emit: no Neo4j client (init failed or disabled)")
             return
         try:
-            _dbg(f"Emitting lineage: sources={list(self.sources)}, destinations={destinations}")
-            self.client.upsert_lineage(self.job_name, list(self.sources), destinations)
+            _dbg(f"Emitting lineage: sources={list(self.sources)}, destinations={destinations}, ctes={list(self.cte_lineage.keys())}")
+            self.client.upsert_lineage(self.job_name, list(self.sources), destinations, self.cte_lineage)
         finally:
-            # Reset sources after a write boundary
+            # Reset sources and CTEs after a write boundary
             self.sources.clear()
+            self.cte_lineage.clear()
+
+
+def _extract_cte_sources(sql: str) -> dict:
+    """
+    Extract CTE definitions and their sources from SQL.
+    Returns dict: {cte_name: set(source_tables)}
+    """
+    cte_lineage = {}
+
+    # Pattern to match: WITH cte_name AS ( or , cte_name AS (
+    # This catches both the first CTE and subsequent CTEs separated by commas
+    cte_pattern = r'(?:\bwith\s+|,\s*)(\w+)\s+as\s*\('
+
+    for match in re.finditer(cte_pattern, sql, re.IGNORECASE):
+        cte_name = match.group(1).lower()
+        start_pos = match.end() - 1  # Position of opening paren
+
+        # Find matching closing paren
+        paren_count = 1
+        pos = start_pos + 1
+        end_pos = start_pos
+
+        while pos < len(sql) and paren_count > 0:
+            if sql[pos] == '(':
+                paren_count += 1
+            elif sql[pos] == ')':
+                paren_count -= 1
+                if paren_count == 0:
+                    end_pos = pos
+                    break
+            pos += 1
+
+        if end_pos > start_pos:
+            # Extract CTE body
+            cte_body = sql[start_pos + 1:end_pos]
+
+            # Extract FROM and JOIN references from CTE body
+            cte_sources = set()
+            from_matches = re.findall(r'\bfrom\s+([\w\.]+)', cte_body, re.IGNORECASE)
+            join_matches = re.findall(r'\bjoin\s+([\w\.]+)', cte_body, re.IGNORECASE)
+
+            cte_sources.update(m.lower() for m in from_matches)
+            cte_sources.update(m.lower() for m in join_matches)
+
+            # Filter out other CTEs (will be resolved as dependencies)
+            # Store the sources for this CTE
+            if cte_sources:
+                cte_lineage[cte_name] = cte_sources
+                _dbg(f"Extracted CTE '{cte_name}' with sources: {cte_sources}")
+
+    return cte_lineage
 
 
 def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
@@ -188,12 +303,13 @@ def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
         dests: List[str] = []
 
         # Extract CTE definitions and their source tables
-        cte_names = set()
-        cte_pattern = r"\bwith\s+(\w+)\s+as\s*\("
-        for cte_match in re.finditer(cte_pattern, lower):
-            cte_name = cte_match.group(1)
-            cte_names.add(cte_name)
-            _dbg(f"CTE detected: {cte_name}")
+        cte_lineage = _extract_cte_sources(q_no_comments)
+        cte_names = set(cte_lineage.keys())
+
+        # Add CTE lineage to tracker (keep all sources including other CTEs)
+        for cte_name, cte_sources in cte_lineage.items():
+            if cte_sources:
+                tracker.add_cte_lineage(cte_name, cte_sources)
 
         # Extract simple FROM and JOIN table references for any SQL
         sources = set(re.findall(r"\bfrom\s+([\w\.]+)", lower))
@@ -211,10 +327,10 @@ def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
             if m:
                 dests = [m.group(2)]
             if dests:
-                _dbg(f"SQL INSERT detected. dests={dests}, sources={list(real_sources)}")
+                _dbg(f"SQL INSERT detected. dests={dests}, sources={list(real_sources)}, ctes={list(cte_names)}")
                 tracker.emit(dests)
         elif real_sources:
-            _dbg(f"SQL SELECT/other detected. sources={list(real_sources)}")
+            _dbg(f"SQL SELECT/other detected. sources={list(real_sources)}, ctes={list(cte_names)}")
         return orig_sql(query, *args, **kwargs)
 
     spark.sql = sql_patched  # type: ignore[assignment]

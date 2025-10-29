@@ -42,11 +42,14 @@ except ImportError:
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
+# http://4.155.148.246/
 AIRFLOW_API = "http://localhost:8082/api/v1"
+# AIRFLOW_API = "http://4.155.148.246:8082/api/v1"
 USERNAME = "admin"
 PASSWORD = "admin"
 
 NEO4J_URI = "bolt://localhost:7687"
+# NEO4J_URI = "bolt://4.155.148.246:7687"
 NEO4J_AUTH = ("neo4j", "neo4j123")
 
 SPARK_OPERATOR_NAMES = {
@@ -556,10 +559,20 @@ class Neo4jClient:
             spark_params = task.get("spark_params", {})
 
             # Create unique job identifier
-            job_name = spark_params.get("name", "unnamed-spark-job")
+            job_name = spark_params.get("name")
             application = spark_params.get("application", "")
 
-            # Create a unique job ID based on application path
+            # Determine merge key: use 'name' if available, otherwise use 'application' path
+            # This ensures SparkJob nodes from lineage_listener.py and parse_airflow.py are merged correctly
+            if job_name:
+                merge_name = job_name
+            elif application:
+                merge_name = application
+            else:
+                # Fallback if neither name nor application is set
+                merge_name = f"{task['dag_id']}_{task['task_id']}_spark_job"
+
+            # Create a unique job ID based on application path (kept for reference)
             if application:
                 # Extract just the filename from the application path
                 job_id = application.split("/")[-1] if "/" in application else application
@@ -574,8 +587,8 @@ class Neo4jClient:
             env_vars = json.dumps(spark_params.get("env_vars")) if spark_params.get("env_vars") else None
 
             query = """
-            MERGE (sj:SparkJob {job_id: $job_id})
-            SET sj.name = $name,
+            MERGE (sj:SparkJob {name: $merge_name})
+            SET sj.job_id = $job_id,
                 sj.application = $application,
                 sj.conn_id = $conn_id,
                 sj.executor_cores = $executor_cores,
@@ -594,8 +607,8 @@ class Neo4jClient:
 
             self.driver.execute_query(
                 query,
+                merge_name=merge_name,
                 job_id=job_id,
-                name=spark_params.get("name"),
                 application=spark_params.get("application"),
                 conn_id=spark_params.get("conn_id"),
                 executor_cores=spark_params.get("executor_cores"),
@@ -615,7 +628,7 @@ class Neo4jClient:
             # Create relationship between Task and SparkJob
             link_query = """
             MATCH (t:Task {task_id: $task_id, dag_id: $dag_id})
-            MATCH (sj:SparkJob {job_id: $job_id})
+            MATCH (sj:SparkJob {name: $merge_name})
             MERGE (t)-[:EXECUTES]->(sj)
             """
 
@@ -623,7 +636,7 @@ class Neo4jClient:
                 link_query,
                 task_id=task["task_id"],
                 dag_id=task["dag_id"],
-                job_id=job_id,
+                merge_name=merge_name,
                 database_="neo4j"
             )
 
@@ -694,7 +707,7 @@ class Neo4jClient:
             self.driver.execute_query("CREATE INDEX ON :DAG(dag_id);", database_="neo4j")
             self.driver.execute_query("CREATE INDEX ON :Task(task_id);", database_="neo4j")
             self.driver.execute_query("CREATE INDEX ON :Task(dag_id);", database_="neo4j")
-            self.driver.execute_query("CREATE INDEX ON :SparkJob(job_id);", database_="neo4j")
+            self.driver.execute_query("CREATE INDEX ON :SparkJob(name);", database_="neo4j")
             print("   ✅ Created indexes")
         except Exception:
             # Indexes might already exist
@@ -782,7 +795,7 @@ def main():
 
     neo4j_client = Neo4jClient(NEO4J_URI, NEO4J_AUTH)
     if neo4j_client.connect():
-        neo4j_client.clear_all()
+        # neo4j_client.clear_all()
         neo4j_client.load_tasks(tasks)
         neo4j_client.close()
 
