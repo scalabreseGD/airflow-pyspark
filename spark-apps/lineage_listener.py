@@ -38,7 +38,8 @@ class Neo4jClient:
             "WITH j "
             "UNWIND $pairs AS p "
             "MATCH (s:Dataset {name: p.source}), (d:Dataset {name: p.dest}) "
-            "MERGE (s)-[:FLOWS_TO]->(j)-[:WRITES_TO]->(d)"
+            "MERGE (s)-[:FLOWS_TO]->(j) "
+            "MERGE (j)-[:WRITES_TO]->(d)"
         )
         cypher_edges_readonly = (
             "MERGE (j:SparkJob {name: $job}) "
@@ -176,23 +177,44 @@ def _enable_monkeypatch_lineage(spark: SparkSession) -> None:
 
     def sql_patched(query: str, *args, **kwargs):
         q = query or ""
-        lower = q.lower()
+        # Strip SQL comments before parsing to avoid false matches
+        # Remove single-line comments (-- ...)
+        q_no_comments = re.sub(r'--[^\n]*', '', q)
+        # Remove multi-line comments (/* ... */)
+        q_no_comments = re.sub(r'/\*.*?\*/', '', q_no_comments, flags=re.DOTALL)
+        lower = q_no_comments.lower()
+
         # Extract destination table for INSERT INTO/OVERWRITE TABLE dest ...
         dests: List[str] = []
+
+        # Extract CTE definitions and their source tables
+        cte_names = set()
+        cte_pattern = r"\bwith\s+(\w+)\s+as\s*\("
+        for cte_match in re.finditer(cte_pattern, lower):
+            cte_name = cte_match.group(1)
+            cte_names.add(cte_name)
+            _dbg(f"CTE detected: {cte_name}")
+
         # Extract simple FROM and JOIN table references for any SQL
         sources = set(re.findall(r"\bfrom\s+([\w\.]+)", lower))
         sources.update(re.findall(r"\bjoin\s+([\w\.]+)", lower))
-        for s in sources:
+
+        # Filter out CTE names from sources (they're not real tables)
+        # but add the actual tables used by CTEs
+        real_sources = sources - cte_names
+
+        for s in real_sources:
             tracker.add_source(s)
+
         if lower.strip().startswith("insert"):
             m = re.search(r"insert\s+(overwrite\s+table|into)\s+([\w\.]+)", lower)
             if m:
                 dests = [m.group(2)]
             if dests:
-                _dbg(f"SQL INSERT detected. dests={dests}, sources={list(sources)}")
+                _dbg(f"SQL INSERT detected. dests={dests}, sources={list(real_sources)}")
                 tracker.emit(dests)
-        elif sources:
-            _dbg(f"SQL SELECT/other detected. sources={list(sources)}")
+        elif real_sources:
+            _dbg(f"SQL SELECT/other detected. sources={list(real_sources)}")
         return orig_sql(query, *args, **kwargs)
 
     spark.sql = sql_patched  # type: ignore[assignment]
