@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 
 # Replace Hadoop with desired version
 ARG HADOOP_VERSION
+ARG AWS_SDK_VERSION
+ARG POSTGRES_JDBC_VERSION
 RUN mv /opt/hadoop /opt/hadoop-old && \
     cd /opt && \
     curl -fsSL -O https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz && \
@@ -27,7 +29,6 @@ ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
 # Reuse JARs already present in spark-with-jars image to avoid re-downloading
-ARG SPARK_VERSION
 COPY --from=spark-jars /opt/spark/jars/hadoop-aws-${HADOOP_VERSION}.jar /opt/hive/lib/
 COPY --from=spark-jars /opt/spark/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar /opt/hive/lib/
 COPY --from=spark-jars /opt/spark/jars/postgresql-${POSTGRES_JDBC_VERSION}.jar /opt/hive/lib/
