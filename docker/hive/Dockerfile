@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.6
 
 ARG SPARK_VERSION=3.5.3
-ARG HADOOP_VERSION=2.10.2
+ARG HADOOP_VERSION=2.10.1
 ARG AWS_SDK_VERSION=1.12.367
 ARG POSTGRES_JDBC_VERSION=42.7.3
 
@@ -18,12 +18,12 @@ RUN apk add --no-cache curl
 ARG HADOOP_VERSION
 ARG AWS_SDK_VERSION
 ARG POSTGRES_JDBC_VERSION
-RUN mv /opt/hadoop /opt/hadoop-old && \
-    cd /opt && \
-    curl -fsSL -O https://downloads.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz && \
-    tar xzf hadoop-${HADOOP_VERSION}.tar.gz && \
-    mv hadoop-${HADOOP_VERSION} hadoop && \
-    rm hadoop-${HADOOP_VERSION}.tar.gz
+#RUN mv /opt/hadoop /opt/hadoop-old && \
+#    cd /opt && \
+#    curl -fsSL -O https://downloads.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz && \
+#    tar xzf hadoop-${HADOOP_VERSION}.tar.gz && \
+#    mv hadoop-${HADOOP_VERSION} hadoop && \
+#    rm hadoop-${HADOOP_VERSION}.tar.gz
 
 ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
