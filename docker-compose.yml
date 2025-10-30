@@ -80,6 +80,7 @@ services:
     build:
       context: ./docker/hive
       dockerfile: Dockerfile
+    image: hive-metastore:2.3.9
     container_name: hive-metastore
     depends_on:
       postgres:

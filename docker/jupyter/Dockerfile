@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.6
 
 ARG SPARK_VERSION=3.5.3
-ARG HADOOP_VERSION=3.3.4
+ARG HADOOP_VERSION=2.10.2
 ARG AWS_SDK_VERSION=1.12.367
 ARG POSTGRES_JDBC_VERSION=42.7.3
-ARG HIVE_VERSION=3.1.3
+ARG HIVE_VERSION=2.3.9
 
 FROM apache/spark:${SPARK_VERSION} AS spark-dist
 
@@ -44,17 +44,11 @@ ENV PYSPARK_PYTHON=/usr/bin/python3
 ENV PYSPARK_DRIVER_PYTHON=jupyter
 ENV PYSPARK_DRIVER_PYTHON_OPTS=notebook
 
-# Add additional JARs used at runtime (versions provided via build args)
+# Add S3 and JDBC JARs only; use Spark's built-in Hive 2.3 deps
 RUN cd ${SPARK_HOME}/jars && \
     curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
     curl -fsSL -O https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hive/hive-metastore/${HIVE_VERSION}/hive-metastore-${HIVE_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hive/hive-exec/${HIVE_VERSION}/hive-exec-${HIVE_VERSION}-core.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hive/hive-common/${HIVE_VERSION}/hive-common-${HIVE_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hive/hive-serde/${HIVE_VERSION}/hive-serde-${HIVE_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hive/hive-standalone-metastore/${HIVE_VERSION}/hive-standalone-metastore-${HIVE_VERSION}.jar && \
-    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/thrift/libthrift/0.12.0/libthrift-0.12.0.jar
+    curl -fsSL -O https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar
 
 # Install Python data-science packages with pip cache
 USER ${NB_UID}
