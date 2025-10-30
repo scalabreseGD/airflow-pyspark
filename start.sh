@@ -62,7 +62,7 @@ fi
 # Build the custom Spark image
 echo
 echo "Building custom Spark image with S3A and Hive support..."
-DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose build --no-cache spark-master spark-worker
+DEFAULT_PLATFORM="$DEFAULT_PLATFORM" docker-compose build spark-master spark-worker
 print_status "Spark image built successfully"
 
 # Start the stack
