@@ -217,7 +217,7 @@ The gold layer contains business-level aggregates optimized for reporting and an
 │   ├── bronze_to_silver_*.py             # Silver layer transformations (6 jobs)
 │   ├── gold_*.py                         # Gold layer analytics (9 jobs)
 │   ├── validate_bronze_data.py           # Bronze data validation
-│   └── lineage_listener.py               # Automatic lineage tracking to Neo4j
+│   └── neo4j_lineage.py                  # Automatic lineage tracking to Neo4j
 ├── notebooks/
 │   ├── create_bronze_tables.ipynb  # Create bronze layer tables
 │   ├── create_silver_tables.ipynb  # Create silver layer tables
@@ -240,17 +240,17 @@ The project includes comprehensive data lineage tracking and knowledge graph cap
 
 ### Automated Spark Data Lineage
 
-**All Spark jobs automatically track and push data lineage to Neo4j** using the `lineage_listener` module. This captures:
+**All Spark jobs automatically track and push data lineage to Neo4j** using the `neo4j_lineage` module. This captures:
 
 - **Source datasets**: Tables and files read during job execution
 - **Destination datasets**: Tables and files written during job execution
 - **Job relationships**: Automatic graph creation showing data flows
 
 **How it works:**
-1. Each Spark job imports and registers the lineage listener after creating SparkSession:
+1. Each Spark job imports and enables lineage tracking after creating SparkSession:
    ```python
-   from lineage_listener import register_lineage_listener
-   register_lineage_listener(spark)
+   from neo4j_lineage import enable
+   enable(spark)
    ```
 
 2. The listener automatically tracks:

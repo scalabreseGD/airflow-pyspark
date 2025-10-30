@@ -40,12 +40,9 @@ builder = SparkSession.builder.enableHiveSupport()
 spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
 # Register lineage listener to push sources/destinations to Neo4j
-try:
-    from lineage_listener import register_lineage_listener
+from neo4j_lineage import enable
 
-    register_lineage_listener(spark)
-except Exception as e:
-    print(f"Warning: Could not register lineage listener: {e}")
+enable(spark)
 
 try:
     print(f"\nStarting table creation at: {datetime.now()}")

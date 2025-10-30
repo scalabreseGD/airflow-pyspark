@@ -781,7 +781,7 @@ Gold Layer (Business Analytics)
 
 ## Automated Data Lineage with Neo4j
 
-All Spark jobs in this project automatically track and push data lineage to Neo4j using the `lineage_listener` module.
+All Spark jobs in this project automatically track and push data lineage to Neo4j using the `neo4j_lineage` module.
 
 ### Overview
 
@@ -804,10 +804,10 @@ spark = SparkSession.builder \
     .enableHiveSupport() \
     .getOrCreate()
 
-# Register lineage listener (automatically tracks all subsequent operations)
+# Enable lineage tracking (automatically tracks all subsequent operations)
 try:
-    from lineage_listener import register_lineage_listener
-    register_lineage_listener(spark)
+    from neo4j_lineage import enable
+    enable(spark)
 except Exception as e:
     print(f"Warning: Could not enable lineage tracking: {e}")
 

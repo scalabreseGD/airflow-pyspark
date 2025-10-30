@@ -137,6 +137,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       - SPARK_NO_DAEMONIZE=true
       - SPARK_MASTER_HOST=spark-master
@@ -170,6 +172,8 @@ services:
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     depends_on:
       - spark-master
+    env_file:
+      - .env
     environment:
       - SPARK_NO_DAEMONIZE=true
       - SPARK_WORKER_CORES=3
@@ -182,8 +186,6 @@ services:
       - AWS_REGION=us-east-1
       - PYSPARK_PYTHON=/usr/bin/python3
       - PYSPARK_DRIVER_PYTHON=/usr/bin/python3
-    #    ports:
-    #      - "8081:8081"
     volumes:
       - ./spark-apps:/opt/spark-apps
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml
@@ -233,6 +235,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow123@postgres:5432/airflow
@@ -263,6 +267,8 @@ services:
     container_name: airflow-webserver
     depends_on:
       - airflow-init
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow123@postgres:5432/airflow
@@ -297,6 +303,8 @@ services:
     container_name: airflow-scheduler
     depends_on:
       - airflow-init
+    env_file:
+      - .env
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow123@postgres:5432/airflow
