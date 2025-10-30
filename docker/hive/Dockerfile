@@ -28,11 +28,11 @@ ARG POSTGRES_JDBC_VERSION
 ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
-# Reuse JARs already present in spark-with-jars image to avoid re-downloading
-COPY --from=spark-jars /opt/spark/jars/hadoop-aws-${HADOOP_VERSION}.jar /opt/hive/lib/
-COPY --from=spark-jars /opt/spark/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar /opt/hive/lib/
-COPY --from=spark-jars /opt/spark/jars/postgresql-${POSTGRES_JDBC_VERSION}.jar /opt/hive/lib/
-# Base Hive image already includes Hive and Thrift libs; avoid duplicating to prevent conflicts
+# Download Hadoop 2.10.1 compatible JARs for Hive (not from Spark which uses 3.3.4)
+RUN cd /opt/hive/lib && \
+    curl -fsSL -O https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_VERSION}/hadoop-aws-${HADOOP_VERSION}.jar && \
+    curl -fsSL -O https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar && \
+    curl -fsSL -O https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar
 
 # Also copy to Hadoop common lib where needed
 RUN cp /opt/hive/lib/hadoop-aws-${HADOOP_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
