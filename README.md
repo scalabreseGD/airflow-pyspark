@@ -56,8 +56,6 @@ Technology Stack:
 - **Jupyter Notebooks**: Interactive development and table creation
 - **Full S3A protocol support**: Direct reads/writes to MinIO
 - **Partitioned tables**: Optimized for performance and cost
-- **Automated Data Lineage**: Real-time lineage tracking for all Spark jobs with Neo4j integration
-- **Knowledge Graph**: Automatic DAG visualization, Spark job tracking, and resource analysis with Neo4j
 
 ## Quick Start
 
@@ -216,8 +214,7 @@ The gold layer contains business-level aggregates optimized for reporting and an
 │   ├── ingest_bronze_data.py             # Bronze layer ingestion
 │   ├── bronze_to_silver_*.py             # Silver layer transformations (6 jobs)
 │   ├── gold_*.py                         # Gold layer analytics (9 jobs)
-│   ├── validate_bronze_data.py           # Bronze data validation
-│   └── neo4j_lineage.py                  # Automatic lineage tracking to Neo4j
+│   └── validate_bronze_data.py           # Bronze data validation
 ├── notebooks/
 │   ├── create_bronze_tables.ipynb  # Create bronze layer tables
 │   ├── create_silver_tables.ipynb  # Create silver layer tables
@@ -233,143 +230,6 @@ The gold layer contains business-level aggregates optimized for reporting and an
 └── plugins/
     └── dag_code.py                 # Custom Airflow plugin for DAG code extraction
 ```
-
-## Data Lineage & Knowledge Graph
-
-The project includes comprehensive data lineage tracking and knowledge graph capabilities powered by Neo4j.
-
-### Automated Spark Data Lineage
-
-**All Spark jobs automatically track and push data lineage to Neo4j** using the `neo4j_lineage` module. This captures:
-
-- **Source datasets**: Tables and files read during job execution
-- **Destination datasets**: Tables and files written during job execution
-- **Job relationships**: Automatic graph creation showing data flows
-
-**How it works:**
-1. Each Spark job imports and enables lineage tracking after creating SparkSession:
-   ```python
-   from neo4j_lineage import enable
-   enable(spark)
-   ```
-
-2. The listener automatically tracks:
-   - `spark.table()` reads
-   - DataFrame reads (CSV, Parquet, JSON, etc.)
-   - DataFrame writes (`saveAsTable`, `insertInto`, `save`)
-   - SQL queries (INSERT INTO, FROM, JOIN clauses)
-
-3. Lineage is pushed to Neo4j in real-time creating:
-   - `(:Dataset)` nodes for tables and files
-   - `(:SparkJob)` nodes for each Spark application
-   - `(Dataset)-[:FLOWS_TO]->(SparkJob)-[:WRITES_TO]->(Dataset)` relationships
-
-**Configuration:**
-Control lineage tracking with environment variables:
-- `LINEAGE_TO_NEO4J=true` (default: enabled)
-- `NEO4J_URI=bolt://neo4j:7687` (default)
-- `NEO4J_USER=neo4j` (default)
-- `NEO4J_PASSWORD=neo4j123` (default)
-- `LINEAGE_DEBUG=true` (default: enabled, prints lineage events)
-
-**View Lineage:**
-```cypher
-// See all data flows
-MATCH (src:Dataset)-[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO]->(dst:Dataset)
-RETURN src, job, dst;
-
-// Trace lineage for a specific table
-MATCH path = (src:Dataset)-[:FLOWS_TO*..5]->(:SparkJob)-[:WRITES_TO]->(target:Dataset {name: "gold.customer_360"})
-RETURN path;
-```
-
-### DAG Knowledge Graph
-
-The project also includes automated knowledge graph generation that extracts DAG metadata and loads it into Neo4j for visualization and analysis.
-
-**Features:**
-
-- **Automatic DAG Discovery**: Extracts all DAGs, tasks, and dependencies from Airflow
-- **AST Parsing**: Analyzes DAG Python files to understand task relationships
-- **Graph Database**: Stores pipeline metadata in Neo4j for querying and visualization
-- **Comprehensive Spark Job Tracking**: 
-  - Application paths and configurations
-  - Resource allocation (memory, cores, executors)
-  - Dependencies (packages, JARs, py_files)
-  - Environment variables and Spark configs
-- **Real-time Updates**: Refresh the graph anytime to reflect current pipeline state
-- **Custom Airflow Plugin**: Extends Airflow REST API to expose DAG source code
-
-### Quick Start
-
-**Note**: The custom Airflow plugin (`plugins/dag_code.py`) is automatically loaded when you start Airflow with this project.
-
-1. **Install Dependencies**:
-   ```bash
-   pip install neo4j requests
-   ```
-
-2. **Verify Plugin is Loaded**:
-   ```bash
-   curl http://localhost:8082/api/v1/dag_code/health
-   # Should return: {"status": "healthy", ...}
-   ```
-
-3. **Start Neo4j** (optional - for visualization):
-```bash
-docker run -d --name neo4j -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/neo4j123 neo4j:5
-```
-
-4. **Generate Knowledge Graph**:
-   ```bash
-   python create-kb/parse-airflow.py
-   ```
-
-5. **Visualize** (open Neo4j Browser):
-```
-http://localhost:7474
-```
-
-   Example query:
-   ```cypher
-   MATCH (d:DAG)-[:CONTAINS]->(t:Task)-[:DEPENDS_ON]->(upstream)
-   RETURN d, t, upstream;
-   ```
-
-### What It Captures
-
-**From DAG parsing:**
-- **DAG nodes** with task counts and Spark job metrics
-- **Task nodes** with operator types, parameters, and relationships
-- **SparkJob nodes** with comprehensive configuration:
-  - Resource allocation (executor memory, cores, number of executors)
-  - Dependencies (Maven packages, JARs, Python files)
-  - Environment variables and Spark configurations
-  - Application paths and arguments
-- **Dependency relationships** (>>, <<, set_upstream/downstream)
-- **Trigger relationships** (TriggerDagRunOperator)
-
-**From Spark lineage tracking:**
-- **Dataset nodes** for all tables and files (bronze, silver, gold layers)
-- **SparkJob nodes** for each Spark application execution
-- **Data flow relationships** showing reads and writes
-- Complete end-to-end lineage: source files → bronze → silver → gold
-
-### Analysis Capabilities
-
-**Pipeline Analysis:**
-- **Resource Optimization**: Identify over/under-provisioned Spark jobs
-- **Dependency Tracking**: See which jobs use Kafka, Delta Lake, or other libraries
-- **Configuration Analysis**: Compare resource allocations across similar jobs
-- **Impact Analysis**: Understand downstream effects of changes
-
-**Lineage Analysis:**
-- **Data Provenance**: Trace where data comes from and where it goes
-- **Impact Analysis**: Find all downstream tables affected by a source change
-- **Debugging**: Identify which jobs produce or consume specific datasets
-- **Compliance**: Document complete data flows for auditing
-
-See [create-kb/README.md](create-kb/README.md) for detailed documentation, examples, and query recipes.
 
 ## Development Workflow
 

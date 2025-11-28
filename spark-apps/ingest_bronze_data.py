@@ -33,11 +33,6 @@ app_name = known_args.app_name
 builder = SparkSession.builder.enableHiveSupport()
 spark = builder.appName(app_name).getOrCreate() if app_name else builder.getOrCreate()
 
-# Register lineage listener to push sources/destinations to Neo4j
-from neo4j_lineage import enable
-
-enable(spark)
-
 # Define the bronze tables and their corresponding CSV files
 bronze_tables = [
     {

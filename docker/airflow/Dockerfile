@@ -16,8 +16,7 @@ ARG HIVE_VERSION
 
 # Install Airflow providers first to leverage Docker layer cache
 RUN --mount=type=cache,target=/home/airflow/.cache/pip \
-    pip install apache-airflow-providers-apache-spark==4.1.3 && \
-    pip install neo4j
+    pip install apache-airflow-providers-apache-spark==4.1.3
 
 USER root
 

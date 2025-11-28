@@ -447,67 +447,6 @@ docker-compose restart jupyter
 6. **Use Hive tables**: Manage metadata through Hive Metastore
 7. **Document transformations**: Add comments to Spark jobs
 
-## Viewing Data Lineage (Optional but Recommended)
-
-All Spark jobs automatically track data lineage and push it to Neo4j. This lets you visualize how data flows through your pipeline.
-
-### Start Neo4j
-
-```bash
-docker-compose up -d neo4j
-```
-
-### View Lineage
-
-1. Open **Neo4j Browser**: http://localhost:7474
-2. Run queries to explore your data flows:
-
-**See all data flows:**
-```cypher
-MATCH (src:Dataset)-[:FLOWS_TO]->(job:SparkJob)-[:WRITES_TO]->(dst:Dataset)
-RETURN src, job, dst;
-```
-
-**Complete pipeline view (Bronze → Silver → Gold):**
-```cypher
-MATCH path = (bronze:Dataset)-[:FLOWS_TO]->(j1:SparkJob)-[:WRITES_TO]->
-             (silver:Dataset)-[:FLOWS_TO]->(j2:SparkJob)-[:WRITES_TO]->(gold:Dataset)
-WHERE bronze.name STARTS WITH "bronze." 
-  AND silver.name STARTS WITH "silver."
-  AND gold.name STARTS WITH "gold."
-RETURN path
-LIMIT 20;
-```
-
-**Find what depends on a table (impact analysis):**
-```cypher
-MATCH path = (source:Dataset {name: "bronze.transactions_raw"})
-      -[:FLOWS_TO*1..10]->(downstream)
-RETURN DISTINCT downstream.name AS affected_tables;
-```
-
-### How It Works
-
-Every Spark job includes this code after creating the SparkSession:
-
-```python
-from neo4j_lineage import enable
-enable(spark)
-```
-
-This automatically tracks:
-- All tables and files read by the job
-- All tables and files written by the job
-- Creates a graph showing complete data flows
-
-**Configuration:**
-Lineage tracking is enabled by default. To disable it, set:
-```bash
-export LINEAGE_TO_NEO4J=false
-```
-
-See [README_AIRFLOW_SPARK.md](README_AIRFLOW_SPARK.md#automated-data-lineage-with-neo4j) for detailed lineage documentation.
-
 ## Getting Help
 
 - **Airflow UI**: http://localhost:8082 - View DAG runs and logs
@@ -524,6 +463,5 @@ You're all set! You now have:
 - Empty silver and gold layers ready for your transformations
 - Airflow orchestrating workflows
 - Jupyter for development
-- Automatic data lineage tracking to Neo4j
 
 Start building your silver and gold transformations and create a complete ETL pipeline!
