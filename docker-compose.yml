@@ -123,6 +123,51 @@ services:
       /opt/hive/bin/hive --service metastore
       "
 
+  # HiveServer2 - JDBC/Thrift endpoint on port 10000
+  hiveserver2:
+    platform: linux/amd64
+    build:
+      context: ./docker/hive
+      dockerfile: Dockerfile
+    image: hive-metastore:2.3.9
+    container_name: hiveserver2
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: hiveserver2
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: admin123
+      AWS_REGION: us-east-1
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    volumes:
+      - ./conf/hive/hive-site.xml:/opt/hive/conf/hive-site.xml
+      - ./conf/hive/core-site.xml:/opt/hive/conf/core-site.xml
+    networks:
+      - spark-network
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/10000'" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    entrypoint: [ "/bin/bash" ]
+    command: >
+      -c "
+      export HIVE_CONF_DIR=/opt/hive/conf;
+      JAVA17_OPTS=\"--add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED\";
+      export HADOOP_CLIENT_OPTS=\"-Xmx1G $$JAVA17_OPTS\";
+      export HADOOP_OPTS=\"$$JAVA17_OPTS\";
+      echo 'Waiting for Hive Metastore to be reachable...';
+      until bash -c 'cat < /dev/null > /dev/tcp/hive-metastore/9083' 2>/dev/null; do sleep 2; done;
+      echo 'Starting HiveServer2...';
+      /opt/hive/bin/hive --service hiveserver2
+      "
+
   # Spark Master with custom image including all dependencies
   spark-master:
     platform: ${DEFAULT_PLATFORM:-linux/amd64}
