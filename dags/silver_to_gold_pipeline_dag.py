@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 
 # Default arguments for the DAG
 default_args = {
@@ -77,6 +78,8 @@ def start_pipeline(**context):
     print("  7. Transform to gold.category_brand_performance")
     print("  8. Transform to gold.channel_attribution")
     print("  9. Transform to gold.cohort_analysis")
+    print(" 10. Transform to gold.sales_summary (HiveQL)")
+    print(" 11. Transform to gold.user_activity_summary (HiveQL)")
     print("\nConcurrency: 3 parallel jobs")
     print("=" * 80)
     return True
@@ -98,6 +101,8 @@ def complete_pipeline(**context):
     print("✓ Gold transformation (category_brand_performance): SUCCESS")
     print("✓ Gold transformation (channel_attribution): SUCCESS")
     print("✓ Gold transformation (cohort_analysis): SUCCESS")
+    print("✓ Gold transformation (sales_summary HiveQL): SUCCESS")
+    print("✓ Gold transformation (user_activity_summary HiveQL): SUCCESS")
     print("\nNext steps:")
     print("  - Verify data quality in all gold tables")
     print("  - Run data quality checks and validations")
@@ -251,6 +256,38 @@ transform_cohort_analysis = SparkSubmitOperator(
     dag=dag,
 )
 
+# Task 12: HiveQL Transform - Sales Summary
+hive_sales_summary = SQLExecuteQueryOperator(
+    task_id='hive_sales_summary',
+    conn_id='hiveserver2_default',
+    sql="""
+        CREATE TABLE IF NOT EXISTS gold.sales_summary AS
+        SELECT 
+            store_id,
+            COUNT(transaction_id) as total_transactions,
+            SUM(total_amount) as total_sales
+        FROM silver.transactions
+        GROUP BY store_id
+    """,
+    dag=dag,
+)
+
+# Task 13: HiveQL Transform - User Activity Summary
+hive_user_activity_summary = SQLExecuteQueryOperator(
+    task_id='hive_user_activity_summary',
+    conn_id='hiveserver2_default',
+    sql="""
+        CREATE TABLE IF NOT EXISTS gold.user_activity_summary AS
+        SELECT 
+            customer_id,
+            COUNT(interaction_id) as total_interactions,
+            MAX(interaction_timestamp) as last_interaction
+        FROM silver.customer_interactions
+        GROUP BY customer_id
+    """,
+    dag=dag,
+)
+
 # Task 11: Pipeline completion
 complete_pipeline_task = PythonOperator(
     task_id='complete_pipeline',
@@ -270,5 +307,7 @@ start_pipeline_task >> create_gold_tables >> [
     transform_campaign_roi_analysis,
     transform_category_brand_performance,
     transform_channel_attribution,
-    transform_cohort_analysis
+    transform_cohort_analysis,
+    hive_sales_summary,
+    hive_user_activity_summary
 ] >> complete_pipeline_task

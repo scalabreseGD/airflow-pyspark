@@ -14,15 +14,11 @@ ARG AWS_SDK_VERSION
 ARG POSTGRES_JDBC_VERSION
 ARG HIVE_VERSION
 
-# Install Airflow providers first to leverage Docker layer cache
-RUN --mount=type=cache,target=/home/airflow/.cache/pip \
-    pip install apache-airflow-providers-apache-spark==4.1.3
-
 USER root
 
 # Install Java and utilities in a single layer for better caching
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-11-jdk procps curl && \
+    apt-get install -y --no-install-recommends openjdk-11-jdk procps curl libsasl2-dev gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Normalize JAVA_HOME across architectures and ensure java is on PATH
@@ -49,3 +45,9 @@ RUN chown -R airflow:root ${SPARK_HOME}
 COPY ./spark-defaults.conf "${SPARK_HOME}/conf/spark-defaults.conf"
 
 USER airflow
+
+# Install Airflow providers first to leverage Docker layer cache
+RUN --mount=type=cache,target=/home/airflow/.cache/pip \
+    pip install "apache-airflow-providers-apache-spark==4.1.3" \
+                "apache-airflow-providers-apache-hive" \
+                --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.7.0/constraints-3.8.txt"

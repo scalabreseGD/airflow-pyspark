@@ -296,6 +296,7 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E=
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key_12345
+      - AIRFLOW_CONN_HIVESERVER2_DEFAULT=hiveserver2://hive@hiveserver2:10000/default
       - _AIRFLOW_DB_MIGRATE=true
       - _AIRFLOW_WWW_USER_CREATE=true
       - _AIRFLOW_WWW_USER_USERNAME=admin
@@ -329,6 +330,7 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key_12345
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+      - AIRFLOW_CONN_HIVESERVER2_DEFAULT=hiveserver2://hive@hiveserver2:10000/default
       - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
     ports:
@@ -366,6 +368,7 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key_12345
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True
+      - AIRFLOW_CONN_HIVESERVER2_DEFAULT=hiveserver2://hive@hiveserver2:10000/default
     volumes:
       - ./dags:/opt/airflow/dags
       - ./plugins:/opt/airflow/plugins
