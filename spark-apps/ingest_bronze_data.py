@@ -19,7 +19,7 @@ import argparse
 from datetime import datetime
 
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import col, to_timestamp
+from pyspark.sql.functions import col, to_date, to_timestamp
 
 print("=" * 80)
 print("  Bronze Data Ingestion")
@@ -109,6 +109,13 @@ try:
             df: DataFrame = df.withColumn('_record_offset_casted', df['_record_offset'].astype('bigint'))
             df = df.drop('_record_offset').withColumnRenamed('_record_offset_casted', '_record_offset') \
                 .drop('_ingestion_timestamp').withColumnRenamed('_ingestion_timestamp_casted', '_ingestion_timestamp')
+
+            # Partition column: derive a DATE from the timestamp.
+            # Name MUST NOT start with '_' — Hadoop FileInputFormat's default
+            # PathFilter treats paths starting with '_' or '.' as hidden and
+            # filters them out, causing Hive to report "Input path does not
+            # exist" for partition directories like `_ingestion_date=.../`.
+            df = df.withColumn('ingestion_date', to_date(col('_ingestion_timestamp')))
 
             cols = [col.col_name for col in
                     spark.sql(f"SHOW COLUMNS IN {full_table_name}").select('col_name').collect()]

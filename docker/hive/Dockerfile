@@ -11,8 +11,9 @@ FROM slamdev/apache-hive:2.3.9-2.10.1
 
 USER root
 
-# Install curl in a single cached layer (Alpine uses apk)
-RUN apk add --no-cache curl
+# Install curl + glibc-compat shim so glibc-linked native libs
+# (e.g. snappy-java's libsnappyjava.so) can load on Alpine/musl.
+RUN apk add --no-cache curl gcompat libstdc++
 
 # Replace Hadoop with desired version
 ARG HADOOP_VERSION
@@ -38,5 +39,12 @@ RUN cd /opt/hive/lib && \
 RUN cp /opt/hive/lib/hadoop-aws-${HADOOP_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
     cp /opt/hive/lib/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/ && \
     cp /opt/hive/lib/postgresql-${POSTGRES_JDBC_VERSION}.jar ${HADOOP_HOME}/share/hadoop/common/lib/
+
+# Symlink default Hadoop *-site.xml into Hive conf so HADOOP_CONF_DIR=/opt/hive/conf
+# still picks up hdfs/yarn settings while core-site.xml (S3A/MinIO) is mounted at runtime.
+RUN cd /opt/hive/conf && \
+    for f in hdfs-site.xml yarn-site.xml hadoop-policy.xml capacity-scheduler.xml; do \
+      ln -sf "/opt/hadoop/etc/hadoop/$$f" . 2>/dev/null || true; \
+    done
 
 # Note: Staying as root user since the base image doesn't have a 'hive' user defined

@@ -48,7 +48,7 @@ try:
     # Table definitions
     tables = {
         "transactions_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.transactions_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.transactions_raw
             (
                 transaction_id STRING,
                 customer_id STRING,
@@ -69,14 +69,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/transactions_raw'
         """,
         "transaction_items_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.transaction_items_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.transaction_items_raw
             (
                 transaction_item_id STRING,
                 transaction_id STRING,
@@ -93,14 +93,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/transaction_items_raw'
         """,
         "subscriptions_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.subscriptions_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.subscriptions_raw
             (
                 subscription_id STRING,
                 customer_id STRING,
@@ -118,14 +118,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/subscriptions_raw'
         """,
         "customer_interactions_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.customer_interactions_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.customer_interactions_raw
             (
                 interaction_id STRING,
                 customer_id STRING,
@@ -142,14 +142,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/customer_interactions_raw'
         """,
         "product_catalog_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.product_catalog_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.product_catalog_raw
             (
                 product_id STRING,
                 product_name STRING,
@@ -171,14 +171,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/product_catalog_raw'
         """,
         "inventory_snapshots_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.inventory_snapshots_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.inventory_snapshots_raw
             (
                 snapshot_id STRING,
                 snapshot_timestamp STRING,
@@ -193,14 +193,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/inventory_snapshots_raw'
         """,
         "marketing_campaigns_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.marketing_campaigns_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.marketing_campaigns_raw
             (
                 campaign_id STRING,
                 campaign_name STRING,
@@ -214,14 +214,14 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/marketing_campaigns_raw'
         """,
         "campaign_events_raw": """
-            CREATE TABLE IF NOT EXISTS bronze.campaign_events_raw
+            CREATE EXTERNAL TABLE IF NOT EXISTS bronze.campaign_events_raw
             (
                 event_id STRING,
                 campaign_id STRING,
@@ -234,10 +234,10 @@ try:
                 _source_system STRING,
                 _ingestion_timestamp TIMESTAMP,
                 _file_name STRING,
-                _record_offset LONG
+                _record_offset BIGINT
             )
-            USING PARQUET
-            PARTITIONED BY (_ingestion_timestamp)
+            PARTITIONED BY (ingestion_date DATE)
+            STORED AS PARQUET
             LOCATION 's3a://data/bronze/campaign_events_raw'
         """
     }

@@ -89,6 +89,8 @@ services:
         condition: service_healthy
     environment:
       SERVICE_NAME: metastore
+      HIVE_CONF_DIR: /opt/hive/conf
+      HADOOP_CONF_DIR: /opt/hive/conf
       DB_DRIVER: postgres
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
@@ -114,6 +116,7 @@ services:
     command: >
       -c "
       export HIVE_CONF_DIR=/opt/hive/conf;
+      export HADOOP_CONF_DIR=/opt/hive/conf;
       export HADOOP_CLIENT_OPTS=\"-Xmx1G -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore -Djavax.jdo.option.ConnectionUserName=hive -Djavax.jdo.option.ConnectionPassword=hive123\";
       echo 'Waiting 5 seconds for PostgreSQL...';
       sleep 5;
@@ -138,6 +141,8 @@ services:
         condition: service_healthy
     environment:
       SERVICE_NAME: hiveserver2
+      HIVE_CONF_DIR: /opt/hive/conf
+      HADOOP_CONF_DIR: /opt/hive/conf
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: admin123
       AWS_REGION: us-east-1
@@ -149,6 +154,7 @@ services:
       - ./conf/hive/core-site.xml:/opt/hive/conf/core-site.xml
     networks:
       - spark-network
+      - retaildemo
     healthcheck:
       test: [ "CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/10000'" ]
       interval: 15s
@@ -159,6 +165,7 @@ services:
     command: >
       -c "
       export HIVE_CONF_DIR=/opt/hive/conf;
+      export HADOOP_CONF_DIR=/opt/hive/conf;
       JAVA17_OPTS=\"--add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED\";
       export HADOOP_CLIENT_OPTS=\"-Xmx1G $$JAVA17_OPTS\";
       export HADOOP_OPTS=\"$$JAVA17_OPTS\";
@@ -332,6 +339,7 @@ services:
       - ./volumes/airflow-logs:/opt/airflow/logs
       - ./spark-apps:/opt/spark-apps:ro
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ./conf/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
     networks:
       - spark-network
     command: webserver
@@ -364,6 +372,7 @@ services:
       - ./volumes/airflow-logs:/opt/airflow/logs
       - ./spark-apps:/opt/spark-apps:ro
       - ./conf/spark/hive-site.xml:/opt/spark/conf/hive-site.xml:ro
+      - ./conf/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
     networks:
       - spark-network
     command: scheduler
@@ -392,3 +401,6 @@ services:
 networks:
   spark-network:
     driver: bridge
+  retaildemo:
+    external: true
+    name: retaildemo

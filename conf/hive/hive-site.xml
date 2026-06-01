@@ -38,6 +38,13 @@
         <value>false</value>
     </property>
 
+    <!-- Allow S3A keys to propagate to MapReduce jobs (stripped by default hidden list).
+         Safe for local MinIO dev; use credential provider in production. -->
+    <property>
+        <name>hive.conf.hidden.list</name>
+        <value>javax.jdo.option.ConnectionPassword,hive.server2.keystore.password,fs.s3.awsAccessKeyId,fs.s3.awsSecretAccessKey,fs.s3n.awsAccessKeyId,fs.s3n.awsSecretAccessKey,fs.s3a.proxy.password</value>
+    </property>
+
     <property>
         <name>hive.server2.webui.host</name>
         <value>0.0.0.0</value>
@@ -93,5 +100,41 @@
     <property>
         <name>fs.s3a.aws.credentials.provider</name>
         <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+    </property>
+
+    <!-- S3A connection pool / thread tuning -->
+    <property>
+        <name>fs.s3a.connection.maximum</name>
+        <value>200</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.threads.max</name>
+        <value>64</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.threads.keepalivetime</name>
+        <value>60</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.max.total.tasks</name>
+        <value>128</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.connection.timeout</name>
+        <value>200000</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.connection.establish.timeout</name>
+        <value>30000</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.attempts.maximum</name>
+        <value>20</value>
     </property>
 </configuration>
