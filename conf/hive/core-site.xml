@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
 <configuration>
+    <!-- Disable Hadoop native libraries. The linux/amd64 libhadoop.so segfaults
+         under x86 emulation on ARM hosts (SIGSEGV in terror) when MR jobs run,
+         taking the whole HiveServer2 JVM down. Pure-Java fallbacks are used instead. -->
+    <property>
+        <name>io.native.lib.available</name>
+        <value>false</value>
+    </property>
+
     <!-- S3A / MinIO Configuration for Hive Metastore -->
     <property>
         <name>fs.s3a.endpoint</name>

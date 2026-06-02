@@ -107,6 +107,7 @@ services:
       - ./conf/hive/core-site.xml:/opt/hive/conf/core-site.xml
     networks:
       - spark-network
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/9083'" ]
       interval: 10s
@@ -155,6 +156,7 @@ services:
     networks:
       - spark-network
       - retaildemo
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "bash", "-c", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/10000'" ]
       interval: 15s
